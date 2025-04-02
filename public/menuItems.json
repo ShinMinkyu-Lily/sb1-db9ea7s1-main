@@ -1,0 +1,36 @@
+[
+    { "id": 1, "name": "체리", "salesPrice": 1000, "purchasePrice": 500, "category": "식품", "remainingStock": 5, "totalStock": 100 },
+    { "id": 2, "name": "대저토마토", "salesPrice": 5000, "purchasePrice": 2000, "category": "식품", "remainingStock": 2, "totalStock": 100 },
+    { "id": 3, "name": "참외", "salesPrice": 3000, "purchasePrice": 2000, "category": "식품", "remainingStock": 10, "totalStock": 100 },
+    { "id": 4, "name": "수박", "salesPrice": 6000, "purchasePrice": 1000, "category": "식품", "remainingStock": 35, "totalStock": 100 },
+    { "id": 5, "name": "딸기", "salesPrice": 7700, "purchasePrice": 2000, "category": "식품", "remainingStock": 36, "totalStock": 100 },
+    { "id": 6, "name": "왕싱싱한딸기", "salesPrice": 6000, "purchasePrice": 6000, "category": "식품", "remainingStock": 23, "totalStock": 100 },
+    { "id": 7, "name": "바나나", "salesPrice": 2000, "purchasePrice": 1000, "category": "식품", "remainingStock": 13, "totalStock": 100 },
+    { "id": 8, "name": "키위", "salesPrice": 2000, "purchasePrice": 800, "category": "식품", "remainingStock": 63, "totalStock": 100 },
+    { "id": 9, "name": "천도복숭아", "salesPrice": 2000, "purchasePrice": 1000, "category": "식품", "remainingStock": 23, "totalStock": 100 },
+    { "id": 10, "name": "백도복숭아", "salesPrice": 7700, "purchasePrice": 2000, "category": "식품", "remainingStock": 43, "totalStock": 100 },
+    { "id": 11, "name": "황도", "salesPrice": 2000, "purchasePrice": 1800, "category": "식품", "remainingStock": 58, "totalStock": 100 },
+    { "id": 12, "name": "대추토마토", "salesPrice": 7700, "purchasePrice": 2000, "category": "식품", "remainingStock": 13, "totalStock": 100 },
+    { "id": 13, "name": "방울토마토", "salesPrice": 2000, "purchasePrice": 700, "category": "식품", "remainingStock": 97, "totalStock": 100 },
+    { "id": 14, "name": "멜론", "salesPrice": 7700, "purchasePrice": 2000, "category": "식품", "remainingStock": 58, "totalStock": 100 },
+    { "id": 15, "name": "리치", "salesPrice": 1800, "purchasePrice": 2000, "category": "식품", "remainingStock": 29, "totalStock": 100 },
+    { "id": 16, "name": "두리안", "salesPrice": 3200, "purchasePrice": 2000, "category": "식품", "remainingStock": 90, "totalStock": 100 },
+    { "id": 17, "name": "코코넛", "salesPrice": 5600, "purchasePrice": 2000, "category": "식품", "remainingStock": 39, "totalStock": 100 },
+    { "id": 18, "name": "앵두", "salesPrice": 2200, "purchasePrice": 2000, "category": "식품", "remainingStock": 31, "totalStock": 100 },
+    { "id": 19, "name": "구기자", "salesPrice": 2000, "purchasePrice": 200, "category": "식품", "remainingStock": 32, "totalStock": 100 },
+    { "id": 20, "name": "망고", "salesPrice": 2000, "purchasePrice": 200, "category": "식품", "remainingStock": 30, "totalStock": 100 },
+    { "id": 21, "name": "오미자", "salesPrice": 2000, "purchasePrice": 600, "category": "식품", "remainingStock": 30, "totalStock": 100 },
+    { "id": 22, "name": "산수유", "salesPrice": 2000, "purchasePrice": 1200, "category": "식품", "remainingStock": 30, "totalStock": 100 },
+    { "id": 23, "name": "파인애플", "salesPrice": 2000, "purchasePrice": 800, "category": "식품", "remainingStock": 30, "totalStock": 100 },
+    { "id": 24, "name": "오렌지", "salesPrice": 2000, "purchasePrice": 900, "category": "식품", "remainingStock": 30, "totalStock": 100 },
+    { "id": 25, "name": "귤", "salesPrice": 2000, "purchasePrice": 400, "category": "식품", "remainingStock": 30, "totalStock": 100 },
+    { "id": 26, "name": "금귤", "salesPrice": 2000, "purchasePrice": 1200, "category": "식품", "remainingStock": 30, "totalStock": 100 },
+    { "id": 27, "name": "블루베리", "salesPrice": 2000, "purchasePrice": 1500, "category": "식품", "remainingStock": 30, "totalStock": 100 },
+    { "id": 28, "name": "산딸기", "salesPrice": 2000, "purchasePrice": 1440, "category": "식품", "remainingStock": 30, "totalStock": 100 },
+    { "id": 29, "name": "자몽", "salesPrice": 2000, "purchasePrice": 100, "category": "식품", "remainingStock": 30, "totalStock": 100 },
+    { "id": 30, "name": "샤인머스캣", "salesPrice": 2000, "purchasePrice": 800, "category": "식품", "remainingStock": 30, "totalStock": 100 }
+
+
+
+  ]
+  

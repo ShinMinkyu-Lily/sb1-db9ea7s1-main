@@ -1,0 +1,177 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.calendar-container {
+  @apply flex flex-col h-full;
+}
+
+.calendar-title {
+  @apply text-2xl font-medium;
+}
+
+.calendar-wrapper {
+  @apply flex-1 overflow-y-auto;
+}
+
+.calendar-header {
+  @apply grid grid-cols-7 gap-4;
+}
+
+.calendar-header-cell {
+  @apply text-center text-gray-500 font-medium py-2;
+}
+
+.calendar-cell {
+  @apply p-2 border rounded-lg min-h-[120px];
+}
+
+.calendar-cell-today {
+  @apply bg-blue-50;
+}
+
+.calendar-cell-date {
+  @apply text-sm text-gray-600 mb-2;
+}
+
+.calendar-cell-sales-container {
+  @apply space-y-1;
+}
+
+.calendar-cell-sales-positive {
+  @apply text-xs text-blue-600;
+}
+
+.calendar-cell-sales-purple {
+  @apply text-xs text-purple-600;
+}
+
+.calendar-cell-sales-negative {
+  @apply text-xs text-red-500;
+}
+
+.calendar-cell-sales-yellow {
+  @apply text-xs text-yellow-600;
+}
+
+.toggle-switch {
+  @apply relative w-10 h-5 rounded-full bg-gray-300 appearance-none cursor-pointer transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+}
+
+.toggle-switch:checked {
+  @apply bg-blue-600;
+}
+
+.toggle-switch::before {
+  content: '';
+  @apply absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 ease-in-out transform;
+}
+
+.toggle-switch:checked::before {
+  @apply translate-x-5;
+}
+
+/* Calendar Styles */
+.calendar-container {
+  background: #1A2537;
+}
+
+.calendar-title {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.calendar-wrapper {
+  border-radius: 0px;
+  background: none;
+}
+
+.calendar-header {
+  gap: 0;
+}
+
+.calendar-header-cell {
+  background: #1F2A3C;
+  padding-top: 16px;
+  padding-bottom: 16px;
+  color: #526B7A;
+  text-align: right;
+  padding-right: 8px;
+  border-bottom: 2px solid #313E54;
+}
+
+.calendar-cell {
+  min-height: 134px;
+  border-radius: 0px;
+  border-color: #1A2537;
+  border-bottom: 2px solid #313E54;
+}
+
+.calendar-cell:hover {
+  --tw-bg-opacity: 1;
+  background-color: #313E54;
+}
+
+.calendar-cell-date {
+  --tw-text-opacity: 1;
+  color: rgba(255, 255, 255, 0.6);
+  float: right;
+  font-weight: 400;
+}
+
+.calendar-cell-today {
+  background: none;
+  border-radius: 0px;
+  border-bottom: 2px solid #313E54;
+}
+
+.calendar-cell-sales-container {
+  margin-top: 1.5rem;
+}
+
+.calendar-cell-sales-positive {
+  background: rgba(54, 199, 108, 0.2);
+  color: #36C76C;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  padding-left: 8px;
+  font-size: 12px;
+  line-height: 20px;
+  border-left: 2px solid #36C76C;
+  border-radius: 4px 40px 40px 4px;
+}
+
+.calendar-cell-sales-negative {
+  background: rgba(255, 102, 146, 0.2);
+  color: #FF6692;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  padding-left: 8px;
+  font-size: 12px;
+  line-height: 20px;
+  border-left: 2px solid #FF6692;
+  border-radius: 4px 40px 40px 4px;
+}
+
+.calendar-cell-sales-yellow {
+  background: rgba(248, 194, 10, 0.2);
+  color: #F8C20A;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  padding-left: 8px;
+  font-size: 12px;
+  line-height: 20px;
+  border-left: 2px solid #F8C20A;
+  border-radius: 4px 40px 40px 4px;
+}
+
+.calendar-cell-sales-purple {
+  background: rgba(99, 91, 255, 0.2);
+  color: #635BFF;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  padding-left: 8px;
+  font-size: 12px;
+  line-height: 20px;
+  border-left: 2px solid #635BFF;
+  border-radius: 4px 40px 40px 4px;
+}
