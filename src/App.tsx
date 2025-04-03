@@ -343,7 +343,7 @@ const todaySales = todayOrders
 
   const getProductRankings = () => {
     const productCounts = new Map<string, number>();
-    completedOrders
+    filteredOrders
       .filter(order => !order.isExpense)
       .forEach(order => {
         order.items.forEach(item => {
@@ -355,37 +355,26 @@ const todaySales = todayOrders
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count);
   };
+  
 
   const hourlySalesData = React.useMemo(() => {
-    // 0~23시 데이터 배열 생성
     const data = Array.from({ length: 24 }, (_, index) => ({
       hour: index,
       amount: 0
     }));
     
-    // 모든 완료된 주문을 순회하면서 시간별로 집계
-    completedOrders.forEach(order => {
+    filteredOrders.forEach(order => {
       if (!order.timestamp) return;
-      
-      // 간단하게 시간만 추출
       const orderDate = new Date(order.timestamp);
       const hour = orderDate.getHours();
-      
-      // 유효한 시간 범위인지 확인
-      if (hour >= 0 && hour < 24) {
-        // 지출이 아닌 경우에만 매출로 집계
-        if (!order.isExpense) {
-          data[hour].amount += Number(order.finalAmount || 0);
-        }
+      if (hour >= 0 && hour < 24 && !order.isExpense) {
+        data[hour].amount += Number(order.finalAmount || 0);
       }
     });
     
     return data;
-  }, [completedOrders]);
+  }, [filteredOrders]);
   
-  
-
-
 
   const calculateInventoryRate = () => {
     const filteredOrders = getFilteredOrders();
