@@ -160,13 +160,18 @@ function App() {
   }, []);
 
   // 주문 탭: 현재 카테고리에 따른 필터
-  const filteredItems = menuItems.filter(item => item.category === activeCategory);
+  const filteredItems = productCategories.find(cat => cat.name === activeCategory)?.enabled
+  ? menuItems.filter(item => item.category === activeCategory)
+  : [];
+
+  
   const itemsPerPage = 24;
   const currentItems = filteredItems.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+  
 
   // ===== 주문 처리 함수 =====
   const addToOrder = (item: MenuItem) => {
@@ -612,60 +617,62 @@ const todaySales = todayOrders
               </div>
 
               {/* ▼▼▼ 주문 탭 - 메뉴 그리드 (절대배치) ▼▼▼ */}
-              <div className="grid grid-cols-6 gap-[12px] p-4 overflow-y-auto flex-1">
-                {currentItems.map(item => {
-                  const ratio = item.totalStock > 0
-                    ? item.remainingStock / item.totalStock
-                    : 0;
-
-                  return (
-                    <button
-                      key={item.id}
-                      className="bg-white shadow border rounded-lg relative overflow-hidden"
-                      style={{ width: '137px', height: '137px', borderWidth: '1px' }}
-                      onClick={() => addToOrder(item)}
-                      disabled={expenses.length > 0}
-                    >
-                      {/* 상품명 */}
-                      <div
-                        className="absolute text-left whitespace-nowrap text-sm font-medium"
-                        style={{ top: '8px', left: '8px', width: '121px', height: '24px' }}
+              {currentItems.length === 0 ? (
+                <div className="flex items-center justify-center w-full h-full text-gray-500">
+                  등록된 상품이 없습니다
+                </div>
+              ) : (
+                <div className="grid grid-cols-6 gap-[12px] p-4 overflow-y-auto flex-1">
+                  {currentItems.map(item => {
+                    const ratio = item.totalStock > 0 ? item.remainingStock / item.totalStock : 0;
+                    return (
+                      <button
+                        key={item.id}
+                        className="bg-white shadow border rounded-lg relative overflow-hidden"
+                        style={{ width: '137px', height: '137px', borderWidth: '1px' }}
+                        onClick={() => addToOrder(item)}
+                        disabled={expenses.length > 0}
                       >
-                        {item.name}
-                      </div>
-
-                      {/* 가로 재고 바 */}
-                      <div
-                        className="absolute text-left bg-gray-200 rounded-full"
-                        style={{ top: '73px', left: '8px', width: '121px', height: '8px' }}
-                      >
+                        {/* 상품명 */}
                         <div
-                          className="bg-blue-500 rounded-full h-full"
-                          style={{
-                            width: `${item.totalStock > 0 ? ((item.remainingStock / item.totalStock) * 100).toFixed(0) : 0}%`
-                          }}
-                        />
-                      </div>
+                          className="absolute text-left whitespace-nowrap text-sm font-medium"
+                          style={{ top: '8px', left: '8px', width: '121px', height: '24px' }}
+                        >
+                          {item.name}
+                        </div>
+                        {/* 가로 재고 바 */}
+                        <div
+                          className="absolute text-left bg-gray-200 rounded-full"
+                          style={{ top: '73px', left: '8px', width: '121px', height: '8px' }}
+                        >
+                          <div
+                            className="bg-blue-500 rounded-full h-full"
+                            style={{
+                              width: `${item.totalStock > 0 ? ((item.remainingStock / item.totalStock) * 100).toFixed(0) : 0}%`
+                            }}
+                          />
+                        </div>
+                        {/* 남은 재고 개수 */}
+                        <div
+                          className="absolute text-left text-xs text-red-500 whitespace-nowrap"
+                          style={{ top: '85px', left: '8px', width: '121px', height: '20px' }}
+                        >
+                          {item.remainingStock}개 남음
+                        </div>
+                        {/* 가격 */}
+                        <div
+                          className="absolute text-left text-sm text-gray-700 whitespace-nowrap"
+                          style={{ top: '107px', left: '8px', width: '121px', height: '22px' }}
+                        >
+                          {(item.salesPrice ?? 0).toLocaleString()}원
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
-                      {/* 남은 재고 개수 */}
-                      <div
-                        className="absolute text-left text-xs text-red-500 whitespace-nowrap"
-                        style={{ top: '85px', left: '8px', width: '121px', height: '20px' }}
-                      >
-                        {item.remainingStock}개 남음
-                      </div>
 
-                      {/* 가격 */}
-                      <div
-                        className="absolute text-left text-sm text-gray-700 whitespace-nowrap"
-                        style={{ top: '107px', left: '8px', width: '121px', height: '22px' }}
-                      >
-                        {(item.salesPrice ?? 0).toLocaleString()}원
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
               {/* ▲▲▲ 주문 탭 - 메뉴 그리드 (절대배치) ▲▲▲ */}
 
               {/* 주문 하단 영역: 할인/지출 + 페이지네이션 */}
