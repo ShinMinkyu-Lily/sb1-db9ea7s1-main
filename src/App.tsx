@@ -274,14 +274,16 @@ function App() {
 
   // ===== 매출/통계 관련 =====
   // 오늘 날짜를 기준으로 완료된 주문 필터링
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const todayOrders = completedOrders.filter(order => {
-    const orderDate = new Date(order.timestamp);
-    orderDate.setHours(0, 0, 0, 0);
-    return orderDate.getTime() === today.getTime();
-  });
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+const todayOrders = completedOrders.filter(order => {
+  const orderDate = new Date(order.timestamp);
+  orderDate.setHours(0, 0, 0, 0);
+  return orderDate.getTime() === today.getTime();
+});
+const todaySales = todayOrders
+  .filter(order => !order.isExpense)
+  .reduce((sum, order) => sum + order.finalAmount, 0);
 
 
   // 필터에 따른 주문 데이터 필터링 함수
@@ -321,16 +323,22 @@ function App() {
   };
 
   const filteredOrders = getFilteredOrders();
-  const daySales = filteredOrders
-    .filter(order => !order.isExpense)
-    .reduce((sum, order) => sum + order.finalAmount, 0);
-  const dayPurchases = filteredOrders
-    .filter(order => !order.isExpense)
-    .reduce((sum, order) => sum + (order.purchaseTotal ?? 0), 0);
-  const dayOtherExpenses = filteredOrders
-    .filter(order => order.isExpense)
-    .reduce((sum, order) => sum - order.finalAmount, 0);
-  const dayProfit = daySales - dayPurchases - dayOtherExpenses;
+  const dashboardSales = filteredOrders
+  .filter(order => !order.isExpense)
+  .reduce((sum, order) => sum + order.finalAmount, 0);
+
+  const headerSales = salesFilter === '오늘' ? todaySales : dashboardSales;
+
+
+  const dashboardPurchases = filteredOrders
+  .filter(order => !order.isExpense)
+  .reduce((sum, order) => sum + (order.purchaseTotal ?? 0), 0);
+  const dashboardOtherExpenses = filteredOrders
+  .filter(order => order.isExpense)
+  .reduce((sum, order) => sum - order.finalAmount, 0);
+  const dashboardProfit = dashboardSales - dashboardPurchases - dashboardOtherExpenses;
+
+  
 
 
   const getProductRankings = () => {
@@ -726,7 +734,7 @@ function App() {
             <div className="w-1/4 bg-white border-l flex flex-col">
               <div className="p-3 border-b flex justify-between items-center bg-gray-50">
                 <span>{format(currentTime, 'yyyy-MM-dd HH:mm:ss')}</span>
-                <span className="font-bold">{daySales.toLocaleString()}원</span>
+                <span className="font-bold">{headerSales.toLocaleString()}원</span>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {orderItems.length === 0 ? (
@@ -911,9 +919,10 @@ function App() {
                     <div className="bg-white rounded-lg shadow p-6">
                       <h2 className="text-lg font-medium mb-4">매출</h2>
                       {completedOrders.length > 0 ? (
-                        <p className={`text-3xl font-bold ${daySales >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
-                          {daySales.toLocaleString()}원
+                        <p className={`text-3xl font-bold ${dashboardSales >= 0 ? 'text-blue-600' : 'text-red-500'}`}>
+                        {dashboardSales.toLocaleString()}원
                         </p>
+                      
                       ) : (
                         <p className="text-gray-500">데이터가 없습니다</p>
                       )}
