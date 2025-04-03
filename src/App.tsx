@@ -95,6 +95,15 @@ function App() {
   // ===== 주문 탭에서 사용하는 메뉴 아이템 =====
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
 
+  // 실시간 현재 시간 상태 및 업데이트 (주문 리스트 상단 헤더에 사용)
+  const [currentTime, setCurrentTime] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // 실제 API에서 데이터를 받아오도록 useEffect 사용
   useEffect(() => {
     fetch('/menuItems.json')
@@ -136,6 +145,13 @@ function App() {
       showToastMessage("지출이 등록된 상태에서는 상품을 추가할 수 없습니다");
       return;
     }
+  
+    // 재고가 없으면 추가하지 않음
+    if (item.remainingStock <= 0) {
+      showToastMessage("재고가 부족합니다");
+      return;
+    }
+  
     setOrderItems(prev => {
       const existingItem = prev.find(orderItem => orderItem.id === item.id);
       if (existingItem) {
@@ -148,7 +164,7 @@ function App() {
       return [...prev, { ...item, quantity: 1 }];
     });
   };
-
+  
   const updateQuantity = (id: number, change: number) => {
     setOrderItems(prev =>
       prev.map(item => {
@@ -185,15 +201,14 @@ function App() {
     } else {
       const subtotal = orderItems.reduce(
         (sum, item) => sum + ((item.salesPrice ?? 0) * (item.quantity || 1)),
-  0
-);
+        0
+      );
       const total = Math.max(0, subtotal - discount);
-      // 구매원가 총합 계산 (각 상품의 purchasePrice × 수량)
       const purchaseTotal = orderItems.reduce(
         (sum, item) => sum + item.purchasePrice * (item.quantity || 1),
         0
       );
-      
+
       const newOrder: Order = {
         id: Date.now(),
         items: orderItems.map(item => ({
@@ -207,9 +222,19 @@ function App() {
         finalAmount: total,
         paymentMethod,
         timestamp: new Date(),
-        purchaseTotal, // 이 값이 오늘 주문의 총 사입 금액입니다.
+        purchaseTotal,
       };
-      
+
+      // 실제 주문(결제) 시에만, 주문된 수량만큼 재고 감소
+      setMenuItems(prev =>
+        prev.map(prod => {
+          const orderItem = orderItems.find(item => item.id === prod.id);
+          if (orderItem) {
+            return { ...prod, remainingStock: Math.max(prod.remainingStock - (orderItem.quantity || 0), 0) };
+          }
+          return prod;
+        })
+      );
       
       setCompletedOrders(prev => [...prev, newOrder]);
       setOrderItems([]);
@@ -219,6 +244,7 @@ function App() {
   };
 
   // ===== 매출/통계 관련 =====
+  // 오늘 날짜를 기준으로 완료된 주문 필터링
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -228,18 +254,18 @@ function App() {
     return orderDate.getTime() === today.getTime();
   });
 
-
+  // 오늘 매출 계산 (판매 주문의 finalAmount 합계)
   const daySales = todayOrders
-  .filter(order => !order.isExpense)
-  .reduce((sum, order) => sum + order.finalAmount, 0);
+    .filter(order => !order.isExpense)
+    .reduce((sum, order) => sum + order.finalAmount, 0);
 
   const dayPurchases = todayOrders
-  .filter(order => !order.isExpense)
-  .reduce((sum, order) => sum + (order.purchaseTotal ?? 0), 0);
+    .filter(order => !order.isExpense)
+    .reduce((sum, order) => sum + (order.purchaseTotal ?? 0), 0);
 
   const dayOtherExpenses = todayOrders
-  .filter(order => order.isExpense)
-  .reduce((sum, order) => sum - order.finalAmount, 0);
+    .filter(order => order.isExpense)
+    .reduce((sum, order) => sum - order.finalAmount, 0);
 
   const dayProfit = daySales - dayPurchases - dayOtherExpenses;
 
@@ -258,18 +284,33 @@ function App() {
       .sort((a, b) => b.count - a.count);
   };
 
-  const getHourlySalesData = () => {
-    const hourlyData = Array(24).fill(0).map((_, index) => ({
+  const hourlySalesData = React.useMemo(() => {
+    // 0~23시 데이터 배열 생성
+    const data = Array.from({ length: 24 }, (_, index) => ({
       hour: index,
       amount: 0
     }));
+    
+    // 모든 완료된 주문을 순회하면서 시간별로 집계
     completedOrders.forEach(order => {
-      const orderHour = new Date(order.timestamp).getHours();
-      const amount = order.isExpense ? order.finalAmount : order.finalAmount;
-      hourlyData[orderHour].amount += amount;
+      if (!order.timestamp) return;
+      
+      // 간단하게 시간만 추출
+      const orderDate = new Date(order.timestamp);
+      const hour = orderDate.getHours();
+      
+      // 유효한 시간 범위인지 확인
+      if (hour >= 0 && hour < 24) {
+        // 지출이 아닌 경우에만 매출로 집계
+        if (!order.isExpense) {
+          data[hour].amount += Number(order.finalAmount || 0);
+        }
+      }
     });
-    return hourlyData;
-  };
+    
+    return data;
+  }, [completedOrders]);
+  
 
   const calculateInventoryRate = () => {
     if (completedOrders.length === 0) return 0;
@@ -366,7 +407,9 @@ function App() {
   const [editProduct, setEditProduct] = useState({
     name: '',
     category: '',
-    price: ''
+    purchasePrice: '',
+    salesPrice: '',
+    quantity: ''
   });
   const [selectedProduct, setSelectedProduct] = useState<MenuItem | null>(null);
 
@@ -390,7 +433,9 @@ function App() {
     setEditProduct({
       name: item.name,
       category: item.category,
-      price: item.salesPrice.toString()
+      purchasePrice: item.purchasePrice.toString(),
+      salesPrice: item.salesPrice.toString(),
+      quantity: item.quantity ? item.quantity.toString() : ''
     });
     setIsProductEditModalOpen(true);
   };
@@ -401,7 +446,7 @@ function App() {
         ...selectedProduct,
         name: editProduct.name,
         category: editProduct.category,
-        salesPrice: Number(editProduct.price)
+        salesPrice: Number(editProduct.salesPrice)
       };
       setMenuItems(prev => prev.map(i => (i.id === selectedProduct.id ? updated : i)));
       setIsProductEditModalOpen(false);
@@ -409,7 +454,6 @@ function App() {
     }
   };
   
-
   const handleDeleteProduct = () => {
     if (selectedProduct) {
       setMenuItems(prev => prev.filter(i => i.id !== selectedProduct.id));
@@ -595,10 +639,8 @@ function App() {
             {/* 오른쪽 주문 내역 영역 */}
             <div className="w-1/4 bg-white border-l flex flex-col">
               <div className="p-3 border-b flex justify-between items-center bg-gray-50">
-                <span>{format(new Date(), 'yyyy-MM-dd HH:mm:ss')}</span>
-                <span className="font-bold">
-                  {orderItems.reduce((sum, item) => sum + item.salesPrice * (item.quantity || 1), 0).toLocaleString()}원
-                </span>
+                <span>{format(currentTime, 'yyyy-MM-dd HH:mm:ss')}</span>
+                <span className="font-bold">{daySales.toLocaleString()}원</span>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {orderItems.length === 0 ? (
@@ -784,7 +826,7 @@ function App() {
                   <div className="mt-8">
                     <h2 className="text-xl font-medium mb-4">시간대별 매출현황</h2>
                     <div className="bg-white rounded-lg shadow p-6">
-                      {completedOrders.length > 0 ? (
+                      {hourlySalesData.some(data => data.amount > 0) ? (
                         <div className="relative h-80">
                           <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-gray-500 text-sm">
                             {Array.from({ length: 6 }).map((_, i) => (
@@ -796,17 +838,17 @@ function App() {
                           
                           <div className="ml-20 h-full flex items-end">
                             <div className="flex-1 flex items-end justify-between h-64">
-                              {getHourlySalesData().map((data, index) => (
+                              {hourlySalesData.map((data, index) => (
                                 <div key={index} className="flex flex-col items-center">
-                                  <div 
-                                    className={`w-8 rounded-sm ${
-                                      data.amount >= 0 ? 'bg-blue-500' : 'bg-red-500'
-                                    }`}
-                                    style={{ 
-                                      height: `${Math.abs(data.amount) / 1000000 * 100}%`,
-                                      minHeight: '4px'
-                                    }}
-                                  ></div>
+                                  <div
+                                  className={`w-8 rounded-sm ${data.amount >= 0 ? 'bg-blue-500' : 'bg-red-500'}`}
+                                  style={{ 
+                                    // 데이터 금액이 100만원을 초과하면 100만원으로 cap
+                                    height: data.amount > 0
+                                      ? `${Math.max(Math.min(data.amount, 1000000) / (1000000 / 300), 4)}px`
+                                      : '0px'
+                                  }}
+                                ></div>
                                   <span className="text-xs text-gray-500 mt-2">{data.hour}시</span>
                                 </div>
                               ))}
@@ -875,7 +917,7 @@ function App() {
                         <button className="px-4 py-2 rounded-md bg-[#1F2A3C] hover:bg-[#313E54] text-white">
                           Month
                         </button>
-                        <button className="px-4 py-2 rounded-md bg-[#313E54] text-gray-400">
+                        <button className="px-4 py-2 rounded-md bg-[#313E3  54] text-gray-400">
                           Year
                         </button>
                       </div>
@@ -1095,6 +1137,7 @@ function App() {
           </div>
         )}
       </div>
+
 
       {/* ===== 일별 상세 매출 모달 ===== */}
       {showDayDetailsModal && selectedDate && (
@@ -1577,27 +1620,33 @@ function App() {
       {isProductEditModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-white rounded-lg w-[500px] overflow-hidden">
+            {/* 헤더 */}
             <div className="flex justify-between items-center p-6 border-b">
               <h3 className="text-xl font-semibold">상품 수정</h3>
               <button onClick={() => setIsProductEditModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                 ✕
               </button>
             </div>
+            {/* 본문: 입력 폼 */}
             <div className="p-6 space-y-4">
+              {/* 상품명 */}
               <div>
-                <input
-                  type="text"
+                <input 
+                  type="text" 
                   placeholder="(필수) 상품 이름을 입력해 주세요"
                   value={editProduct.name}
                   onChange={(e) => setEditProduct({ ...editProduct, name: e.target.value })}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full p-3 border border-gray-300 rounded-lg 
+                             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              <div className="relative">
-                <select
+              {/* 카테고리 */}
+              <div>
+                <select 
                   value={editProduct.category}
                   onChange={(e) => setEditProduct({ ...editProduct, category: e.target.value })}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full p-3 border border-gray-300 rounded-lg 
+                             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">카테고리 선택</option>
                   {productCategories.map(cat => (
@@ -1605,25 +1654,52 @@ function App() {
                   ))}
                 </select>
               </div>
+              {/* 사입 금액 */}
               <div className="relative">
-                <input
-                  type="number"
-                  placeholder="(필수) 사입(시작) 금액을 입력해 주세요"
-                  value={editProduct.price}
-                  onChange={(e) => setEditProduct({ ...editProduct, price: e.target.value })}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-8"
+                <input 
+                  type="number" 
+                  placeholder="(필수) 사입 금액을 입력해 주세요"
+                  value={editProduct.purchasePrice}
+                  onChange={(e) => setEditProduct({ ...editProduct, purchasePrice: e.target.value })}
+                  className="w-full p-3 pr-8 border border-gray-300 rounded-lg 
+                             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">원</span>
               </div>
+              {/* 판매 가격 */}
+              <div className="relative">
+                <input 
+                  type="number" 
+                  placeholder="(필수) 판매 가격을 입력해 주세요"
+                  value={editProduct.salesPrice}
+                  onChange={(e) => setEditProduct({ ...editProduct, salesPrice: e.target.value })}
+                  className="w-full p-3 pr-8 border border-gray-300 rounded-lg 
+                             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">원</span>
+              </div>
+              {/* 판매 재고 수량 */}
+              <div className="relative">
+                <input 
+                  type="number" 
+                  placeholder="(필수) 판매 재고 수량을 입력해 주세요"
+                  value={editProduct.quantity}
+                  onChange={(e) => setEditProduct({ ...editProduct, quantity: e.target.value })}
+                  className="w-full p-3 pr-8 border border-gray-300 rounded-lg 
+                             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">개</span>
+              </div>
             </div>
+            {/* 푸터: 버튼 */}
             <div className="flex justify-end gap-2 p-6 border-t bg-gray-50">
-              <button
+              <button 
                 onClick={() => setIsProductEditModalOpen(false)}
                 className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
               >
                 취소
               </button>
-              <button
+              <button 
                 onClick={handleEditProduct}
                 className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700"
               >
