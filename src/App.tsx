@@ -11,6 +11,8 @@ import {
   Plus as PlusIcon
 } from 'lucide-react';
 
+type SalesFilter = '어제' | '오늘' | '이번 주' | '이번 달' | '직접 선택';
+
 interface Category {
   id: number;
   name: string;
@@ -70,7 +72,7 @@ function App() {
   const [itemToDelete, setItemToDelete] = useState<number | null>(null);
   const [expenseToDelete, setExpenseToDelete] = useState<number | null>(null);
   const [showDayDetailsModal, setShowDayDetailsModal] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   // ===== 카테고리 & 대시보드 상태 =====
   const [productCategories, setProductCategories] = useState<Category[]>([
@@ -84,6 +86,9 @@ function App() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingText, setEditingText] = useState<string>('');
+
+  // ===== 대시보드 필터 상태 =====
+  const [salesFilter, setSalesFilter] = useState<SalesFilter>('오늘');
 
   // 상단 탭: 주문 / 현황
   const [activeView, setActiveView] = useState<'order' | 'dashboard'>('order');
@@ -103,6 +108,30 @@ function App() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+   // 툴팁 상태 (시간대별 매출 그래프에 사용)
+   const [tooltip, setTooltip] = useState<{ visible: boolean; x: number; y: number; amount: number }>({
+    visible: false,
+    x: 0,
+    y: 0,
+    amount: 0,
+  });
+  const handleBarClick = (e: React.MouseEvent<HTMLDivElement>, data: { hour: number; amount: number }) => {
+    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+    setTooltip({
+      visible: true,
+      x: rect.left + rect.width / 2,
+      y: rect.top - 10,
+      amount: data.amount,
+    });
+  };
+  useEffect(() => {
+    if (tooltip.visible) {
+      const timer = setTimeout(() => setTooltip(prev => ({ ...prev, visible: false })), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [tooltip.visible]);
+
 
   // 실제 API에서 데이터를 받아오도록 useEffect 사용
   useEffect(() => {
@@ -254,20 +283,55 @@ function App() {
     return orderDate.getTime() === today.getTime();
   });
 
-  // 오늘 매출 계산 (판매 주문의 finalAmount 합계)
-  const daySales = todayOrders
+
+  // 필터에 따른 주문 데이터 필터링 함수
+  const getFilteredOrders = (): Order[] => {
+    if (salesFilter === '어제' || salesFilter === '오늘' || salesFilter === '직접 선택') {
+      const compareDate = new Date(selectedDate);
+      compareDate.setHours(0, 0, 0, 0);
+      return completedOrders.filter(order => {
+        const orderDate = new Date(order.timestamp);
+        orderDate.setHours(0, 0, 0, 0);
+        return orderDate.getTime() === compareDate.getTime();
+      });
+    } else if (salesFilter === '이번 주') {
+      const compareDate = new Date(selectedDate);
+      const day = compareDate.getDay(); // Sunday = 0, Saturday = 6
+      const startOfWeek = new Date(compareDate);
+      startOfWeek.setDate(compareDate.getDate() - day);
+      startOfWeek.setHours(0, 0, 0, 0);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+      return completedOrders.filter(order => {
+        const orderDate = new Date(order.timestamp);
+        return orderDate >= startOfWeek && orderDate <= endOfWeek;
+      });
+    } else if (salesFilter === '이번 달') {
+      const compareDate = new Date(selectedDate);
+      const startOfMonth = new Date(compareDate.getFullYear(), compareDate.getMonth(), 1);
+      const endOfMonth = new Date(compareDate.getFullYear(), compareDate.getMonth() + 1, 0);
+      endOfMonth.setHours(23, 59, 59, 999);
+      return completedOrders.filter(order => {
+        const orderDate = new Date(order.timestamp);
+        return orderDate >= startOfMonth && orderDate <= endOfMonth;
+      });
+    }
+    return [];
+  };
+
+  const filteredOrders = getFilteredOrders();
+  const daySales = filteredOrders
     .filter(order => !order.isExpense)
     .reduce((sum, order) => sum + order.finalAmount, 0);
-
-  const dayPurchases = todayOrders
+  const dayPurchases = filteredOrders
     .filter(order => !order.isExpense)
     .reduce((sum, order) => sum + (order.purchaseTotal ?? 0), 0);
-
-  const dayOtherExpenses = todayOrders
+  const dayOtherExpenses = filteredOrders
     .filter(order => order.isExpense)
     .reduce((sum, order) => sum - order.finalAmount, 0);
-
   const dayProfit = daySales - dayPurchases - dayOtherExpenses;
+
 
   const getProductRankings = () => {
     const productCounts = new Map<string, number>();
@@ -311,15 +375,37 @@ function App() {
     return data;
   }, [completedOrders]);
   
+  
+
+
 
   const calculateInventoryRate = () => {
-    if (completedOrders.length === 0) return 0;
-    const totalOrderedItems = completedOrders
+    const filteredOrders = getFilteredOrders();
+    if (filteredOrders.length === 0) return 0;
+    const totalOrderedItems = filteredOrders
       .filter(order => !order.isExpense)
       .reduce((sum, order) => sum + order.items.length, 0);
     const totalMenuItems = menuItems.length;
     return Math.round((totalOrderedItems / totalMenuItems) * 100);
   };
+  
+
+    // ===== 대시보드 필터 상태 및 핸들러 =====
+    const handleFilterChange = (filter: SalesFilter) => {
+      setSalesFilter(filter);
+      if (filter === '오늘') {
+        setSelectedDate(new Date());
+      } else if (filter === '어제') {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        setSelectedDate(yesterday);
+      }
+        // '이번 주'와 '이번 달'은 별도 로직(위의 getFilteredOrders 함수 내에서 처리)
+    };
+    const handleDateChange = (newDate: Date) => {
+      setSelectedDate(newDate);
+      setSalesFilter('직접 선택');
+    };
 
   // ===== 카테고리 관리 함수 =====
   const handleToggle = (id: number) => {
@@ -788,8 +874,39 @@ function App() {
 
             <div className={`flex-1 p-6 ${dashboardTab === '매출달력' ? 'calendar-container' : ''}`}>
               {dashboardTab === '매출현황' && (
-                <div>
-                  <h1 className="text-2xl font-medium mb-6">매출현황</h1>
+                <>
+                  {/* 매출현황 제목 */}
+                  <h1 className="text-2xl font-medium mb-4">매출현황</h1>
+
+                  {/* 필터 UI: 어제/오늘/이번 주/이번 달 버튼 + 날짜 선택 */}
+                  <div className="mb-6">
+                    <div className="flex items-center space-x-3 mb-4">
+                      {(['어제', '오늘', '이번 주', '이번 달'] as SalesFilter[]).map(filter => (
+                        <button
+                          key={filter}
+                          onClick={() => handleFilterChange(filter)}
+                          className={`px-4 py-2 rounded-md ${
+                            salesFilter === filter
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white border border-gray-200 text-gray-600'
+                          }`}
+                        >
+                          {filter}
+                        </button>
+                      ))}
+                      <input
+                        type="date"
+                        value={format(selectedDate, 'yyyy-MM-dd')}
+                        onChange={e => {
+                          const newDate = new Date(e.target.value);
+                          handleDateChange(newDate);
+                        }}
+                        className="px-4 py-2 border border-gray-200 rounded-md text-gray-600"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* 카드 영역 (매출, 재고 소진율, 주문건) */}
                   <div className="grid grid-cols-3 gap-6">
                     <div className="bg-white rounded-lg shadow p-6">
                       <h2 className="text-lg font-medium mb-4">매출</h2>
@@ -815,7 +932,7 @@ function App() {
                       <h2 className="text-lg font-medium mb-4">주문건</h2>
                       {completedOrders.length > 0 ? (
                         <p className="text-3xl font-bold text-blue-600">
-                          {completedOrders.filter(order => !order.isExpense).length}건
+                          {getFilteredOrders().filter(order => !order.isExpense).length}건
                         </p>
                       ) : (
                         <p className="text-gray-500">데이터가 없습니다</p>
@@ -885,8 +1002,8 @@ function App() {
                       )}
                     </div>
                   </div>
-                </div>
-              )}
+                </>
+               )}
 
               {dashboardTab === '매출달력' && (
                 <div className="flex-1 p-6">
@@ -917,7 +1034,7 @@ function App() {
                         <button className="px-4 py-2 rounded-md bg-[#1F2A3C] hover:bg-[#313E54] text-white">
                           Month
                         </button>
-                        <button className="px-4 py-2 rounded-md bg-[#313E3  54] text-gray-400">
+                        <button className="px-4 py-2 rounded-md bg-[#313E354] text-gray-400">
                           Year
                         </button>
                       </div>
@@ -1420,6 +1537,20 @@ function App() {
           </div>
         </div>
       )}
+
+  
+      {/* ===== 시간대별 매출 그래프 툴팁 ===== */}
+      {tooltip.visible && (
+        <div
+          style={{ left: tooltip.x, top: tooltip.y, zIndex: 1000 }}
+          className="fixed bg-black text-white text-xs p-1 rounded cursor-pointer"
+          onClick={() => setTooltip(prev => ({ ...prev, visible: false }))}
+        >
+          {tooltip.amount.toLocaleString()}원
+        </div>
+      )}
+
+
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
