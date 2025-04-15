@@ -96,6 +96,8 @@ function App() {
   // 대시보드 탭: 매출현황 / 매출달력 / '상품'(추가) / '카테고리'
   const [dashboardTab, setDashboardTab] = useState<'매출현황' | '매출달력' | '상품' | '카테고리'>('매출현황');
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
+  const [viewMode, setViewMode] = useState<'day' | 'year'>('day');
+
 
   // ===== 주문 탭에서 사용하는 메뉴 아이템 =====
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -392,22 +394,59 @@ const todaySales = todayOrders
   };
   
 
-    // ===== 대시보드 필터 상태 및 핸들러 =====
-    const handleFilterChange = (filter: SalesFilter) => {
-      setSalesFilter(filter);
-      if (filter === '오늘') {
-        setSelectedDate(new Date());
-      } else if (filter === '어제') {
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        setSelectedDate(yesterday);
-      }
-        // '이번 주'와 '이번 달'은 별도 로직(위의 getFilteredOrders 함수 내에서 처리)
-    };
-    const handleDateChange = (newDate: Date) => {
-      setSelectedDate(newDate);
-      setSalesFilter('직접 선택');
-    };
+    // SalesFilter 타입은 이미 '어제' | '오늘' | '이번 주' | '이번 달' | '직접 선택'으로 정의되어 있다고 가정합니다.
+const handleFilterChange = (filter: SalesFilter) => {
+  setSalesFilter(filter);
+  const now = new Date();
+  if (filter === '오늘') {
+    setSelectedDate(now);
+  } else if (filter === '어제') {
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    setSelectedDate(yesterday);
+  } else if (filter === '이번 주') {
+    // 현재 날짜의 주월요일 계산 (일요일일 경우 6일 전 처리)
+    const dayOfWeek = now.getDay(); // Sunday = 0
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diff);
+    setSelectedDate(monday);
+  } else if (filter === '이번 달') {
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    setSelectedDate(firstOfMonth);
+  } else if (filter === '직접 선택') {
+    // 날짜 선택 인풋을 사용하게 됨
+  }
+};
+
+const handleDateChange = (newDate: Date) => {
+  setSelectedDate(newDate);
+  setSalesFilter('직접 선택');
+};
+
+const handleMonthButtonClick = () => {
+  // 해당 달의 첫째날로 설정
+  const now = new Date();
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  setSelectedDate(firstOfMonth);
+  // 월 필터를 '이번 달'로 설정
+  setSalesFilter('이번 달');
+  // viewMode를 'day'로 전환해서 원래 달력 모드로 돌아갑니다.
+  setViewMode('day');
+};
+
+const handleYearButtonClick = () => {
+  // Year 버튼 클릭 시 연도 뷰로 전환
+  setViewMode('year');
+};
+
+const handleMonthSelect = (year: number, month: number) => {
+  // month: 1~12, JS Date는 0~11이므로 주의
+  setSelectedDate(new Date(year, month - 1, 1));
+  // 월 버튼을 클릭하면 일간 모드(viewMode 'day')로 전환하여 해당 달의 첫째날이 하이라이트 됩니다.
+  setViewMode('day');
+};
+
 
   // ===== 카테고리 관리 함수 =====
   const handleToggle = (id: number) => {
@@ -900,9 +939,9 @@ const todaySales = todayOrders
                       ))}
                       <input
                         type="date"
-                        value={format(selectedDate, 'yyyy-MM-dd')}
+                        value={format(selectedDate ?? new Date(), 'yyyy-MM-dd')}
                         onChange={e => {
-                          const newDate = new Date(e.target.value);
+                          const newDate = e.target.value ? new Date(e.target.value) : new Date();
                           handleDateChange(newDate);
                         }}
                         className="px-4 py-2 border border-gray-200 rounded-md text-gray-600"
@@ -1010,41 +1049,83 @@ const todaySales = todayOrders
                 </>
                )}
 
-              {dashboardTab === '매출달력' && (
-                <div className="flex-1 p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-medium calendar-title">매출달력</h1>
-                    <div className="flex items-center space-x-3">
-                      <div className="flex items-center space-x-2 text-white">
-                        <button className="px-4 py-2 rounded-md bg-[#1F2A3C] hover:bg-[#313E54] flex items-center">
-                          <span>오늘</span>
-                        </button>
-                        <button className="px-4 py-2 rounded-md bg-[#1F2A3C] hover:bg-[#313E54] flex items-center">
-                          <span>이번 주</span>
-                        </button>
-                        <button className="px-4 py-2 rounded-md bg-[#1F2A3C] hover:bg-[#313E54] flex items-center">
-                          <span>이번 달</span>
-                        </button>
-                      </div>
-                      <div className="h-6 w-px bg-[#313E54]"></div>
-                      <div className="flex items-center space-x-2">
-                        <button className="flex items-center space-x-2 px-4 py-2 rounded-md bg-[#1F2A3C] hover:bg-[#313E54] text-white">
-                          <span>{new Date().getFullYear()}</span>
-                          <PlusIcon className="w-4 h-4" />
-                        </button>
-                        <button className="flex items-center space-x-2 px-4 py-2 rounded-md bg-[#1F2A3C] hover:bg-[#313E54] text-white">
-                          <span>{new Date().toLocaleString('default', { month: 'short' })}</span>
-                          <PlusIcon className="w-4 h-4" />
-                        </button>
-                        <button className="px-4 py-2 rounded-md bg-[#1F2A3C] hover:bg-[#313E54] text-white">
-                          Month
-                        </button>
-                        <button className="px-4 py-2 rounded-md bg-[#313E354] text-gray-400">
-                          Year
-                        </button>
+                {dashboardTab === '매출달력' && (
+                  <div className="flex-1 p-6">
+                    {/* 매출달력 상단 필터 UI */}
+                    <div className="mb-4">
+                      <div className="flex justify-between items-center">
+                        {/* 좌측: 어제/오늘/이번 주/이번 달 버튼 및 날짜 선택 */}
+                        <div className="flex items-center space-x-3">
+                          {(['어제', '오늘', '이번 주', '이번 달'] as SalesFilter[]).map(filter => (
+                            <button
+                              key={filter}
+                              onClick={() => handleFilterChange(filter)}
+                              className={`px-4 py-2 rounded-md ${
+                                salesFilter === filter
+                                  ? 'bg-[#635BFF] text-white'
+                                  : 'bg-[#313E54] text-white'
+                              }`}
+                            >
+                              {filter}
+                            </button>
+                          ))}
+                          <input
+                            type="date"
+                            value={format(selectedDate ?? new Date(), 'yyyy-MM-dd')}
+                            onChange={e => {
+                              const newDate = e.target.value ? new Date(e.target.value) : new Date();
+                              handleDateChange(newDate);
+                            }}
+                            className="px-4 py-2 border border-gray-200 rounded-md text-gray-600"
+                          />
+                        </div>
+                        {/* 우측: Month 및 Year 버튼 */}
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={handleMonthButtonClick}
+                            className="px-4 py-2 rounded-md bg-[#313E54] text-white"
+                          >
+                            Month
+                          </button>
+                          <button
+                            onClick={handleYearButtonClick}
+                            className="px-4 py-2 rounded-md bg-[#313E54] text-white"
+                          >
+                            Year
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
+
+                   {/* Year 모드와 Day 모드로 나뉘어 렌더링 */}
+                   {viewMode === 'year' && (
+                    <div className="p-6">
+                      {/* 상단: 연도 표시 (하얀색) */}
+                      <div className="mb-2 flex justify-center items-center text-xl font-bold text-white">
+                        {selectedDate.getFullYear()}년
+                      </div>
+                      {/* 1월부터 12월까지 월 버튼 (컨테이너에 min-height: 134px 적용) */}
+                      <div className="grid grid-cols-4 gap-4 mt-4 min-h-[134px]">
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+                          const isSelected = selectedDate.getMonth() === m - 1;
+                          return (
+                            <button
+                              key={m}
+                              onClick={() => handleMonthSelect(selectedDate.getFullYear(), m)}
+                              className={`py-2 rounded text-sm font-medium ${
+                                isSelected
+                                  ? 'bg-[#635BFF] text-white'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                            >
+                              {m}월
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {viewMode === 'day' && (
                   <div className="bg-white rounded-lg shadow p-6 calendar-wrapper">
                     <div className="grid grid-cols-7 gap-4 calendar-header">
                       {['일', '월', '화', '수', '목', '금', '토'].map(day => (
@@ -1052,100 +1133,89 @@ const todaySales = todayOrders
                           {day}
                         </div>
                       ))}
-                      {(() => {
-                        const today = new Date();
-                        const year = today.getFullYear();
-                        const month = today.getMonth();
-                        const firstDayOfMonth = new Date(year, month, 1);
-                        const lastDayOfMonth = new Date(year, month + 1, 0);
-                        const firstDayOfWeek = firstDayOfMonth.getDay();
-                        const daysInMonth = lastDayOfMonth.getDate();
-                        const daysArray = [];
-
-                        for (let i = 0; i < firstDayOfWeek; i++) {
-                          daysArray.push(null);
-                        }
-
-                        for (let i = 1; i <= daysInMonth; i++) {
-                          daysArray.push(new Date(year, month, i));
-                        }
-
-                        return daysArray.map((date, index) => {
-                          if (!date) {
-                            return <div key={`empty-${index}`} className="calendar-cell"></div>;
-                          }
-
-                          const isToday = date.toDateString() === today.toDateString();
-
-                          const dayOrders = completedOrders.filter(order => {
-                            const orderDate = new Date(order.timestamp);
-                            orderDate.setHours(0, 0, 0, 0);
-                            return orderDate.getTime() === date.getTime();
-                          });
-                          
-                          if (dayOrders.length === 0) {
-                            return (
-                              <div
-                                key={`date-${index}`}
-                                className={`calendar-cell cursor-pointer ${isToday ? 'calendar-cell-today' : ''}`}
-                              >
-                                <div className="calendar-cell-date">{date.getDate()}</div>
-                              </div>
-                            );
-                          }
-
-                          const daySales = dayOrders
-                          .filter(order => !order.isExpense)
-                          .reduce((sum, order) => sum + order.finalAmount, 0);
-
-                          const dayPurchases = dayOrders
-                          .filter(order => !order.isExpense)
-                          .reduce((sum, order) => sum + (order.purchaseTotal ?? 0), 0);
-
-
-                          const dayOtherExpenses = dayOrders
-                          .filter(order => order.isExpense)
-                          .reduce((sum, order) => sum - order.finalAmount, 0);
-
-
-                          const dayProfit = daySales - dayPurchases - dayOtherExpenses;
-
-
-                          return (
-                            <div
-                              key={`date-${index}`}
-                              className={`calendar-cell cursor-pointer ${isToday ? 'calendar-cell-today' : ''}`}
-                              onClick={() => {
-                                if (dayOrders.length > 0) {
-                                  setSelectedDate(date);
-                                  setShowDayDetailsModal(true);
-                                }
-                              }}
-                            >
-                              {todayOrders.length > 0 && (
-                                <div className="calendar-cell-sales-container">
-                                  <div className="calendar-cell-sales-positive">
-                                    {daySales.toLocaleString()}원
-                                  </div>
-                                  <div className="calendar-cell-sales-purple">
-                                    {dayPurchases.toLocaleString()}원
-                                  </div>
-                                  <div className="calendar-cell-sales-negative">
-                                    {dayOtherExpenses.toLocaleString()}원
-                                  </div>
-                                  <div className="calendar-cell-sales-yellow">
-                                    {dayProfit.toLocaleString()}원
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        });
-                      })()}
+                                {(() => {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = today.getMonth();
+            const firstDayOfMonth = new Date(year, month, 1);
+            const lastDayOfMonth = new Date(year, month + 1, 0);
+            const firstDayOfWeek = firstDayOfMonth.getDay();
+            const daysInMonth = lastDayOfMonth.getDate();
+            const daysArray = [];
+            for (let i = 0; i < firstDayOfWeek; i++) {
+              daysArray.push(null);
+            }
+            for (let i = 1; i <= daysInMonth; i++) {
+              daysArray.push(new Date(year, month, i));
+            }
+            return daysArray.map((date, index) => {
+              if (!date) {
+                // date가 null인 경우, 빈 셀 반환
+                return <div key={`empty-${index}`} className="calendar-cell"></div>;
+              }
+              const isToday = date.toDateString() === today.toDateString();
+              const dayOrders = completedOrders.filter(order => {
+                const orderDate = new Date(order.timestamp);
+                orderDate.setHours(0, 0, 0, 0);
+                return orderDate.getTime() === date.getTime();
+              });
+              if (dayOrders.length === 0) {
+                return (
+                  <div
+                    key={`date-${index}`}
+                    className={`calendar-cell cursor-pointer ${isToday ? 'calendar-cell-today' : ''}`}
+                  >
+                    <div className="calendar-cell-date">{date.getDate()}</div>
+                  </div>
+                );
+              }
+              const daySales = dayOrders
+                .filter(order => !order.isExpense)
+                .reduce((sum, order) => sum + order.finalAmount, 0);
+              const dayPurchases = dayOrders
+                .filter(order => !order.isExpense)
+                .reduce((sum, order) => sum + (order.purchaseTotal ?? 0), 0);
+              const dayOtherExpenses = dayOrders
+                .filter(order => order.isExpense)
+                .reduce((sum, order) => sum - order.finalAmount, 0);
+              const dayProfit = daySales - dayPurchases - dayOtherExpenses;
+              const isSelected = date.toDateString() === selectedDate.toDateString();
+              return (
+                <div
+                  key={`date-${index}`}
+                  className={`calendar-cell cursor-pointer ${isToday ? 'calendar-cell-today' : ''} ${isSelected ? 'bg-[#635BFF] text-white' : ''}`}
+                  onClick={() => {
+                    setSelectedDate(date);
+                    setSalesFilter('직접 선택');
+                  }}
+                  style={{ minWidth: 'auto' }}
+                >
+                  <div className="calendar-cell-date">{date.getDate()}</div>
+                  <div className="calendar-cell-sales-container">
+                    <div className="calendar-cell-sales-positive">
+                      {daySales.toLocaleString()}원
+                    </div>
+                    <div className="calendar-cell-sales-purple">
+                      {dayPurchases.toLocaleString()}원
+                    </div>
+                    <div className="calendar-cell-sales-negative">
+                      {dayOtherExpenses.toLocaleString()}원
+                    </div>
+                    <div className="calendar-cell-sales-yellow">
+                      {dayProfit.toLocaleString()}원
                     </div>
                   </div>
                 </div>
-              )}
+              );
+            });
+          })()}
+        </div>
+      </div>
+    )}
+  </div>
+)}
+
+  
 
               {dashboardTab === '상품' && (
                 <div className="max-w-7xl mx-auto mt-8 p-6 bg-white rounded-lg shadow">
