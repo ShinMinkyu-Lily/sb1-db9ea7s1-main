@@ -11,6 +11,7 @@ import {
   Plus as PlusIcon
 } from 'lucide-react';
 
+
 import { 
   collection, 
   query, 
@@ -22,6 +23,7 @@ import {
   serverTimestamp,
   getDocs,
   FirestoreError, 
+  onSnapshot,
 } from "firebase/firestore";
 import type { QuerySnapshot, DocumentData } from "firebase/firestore";
 import { db } from "./firebase";
@@ -91,6 +93,9 @@ function App() {
   const [expenseToDelete, setExpenseToDelete] = useState<number | null>(null);
   const [showDayDetailsModal, setShowDayDetailsModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+
   
 
   // ===== 카테고리 & 대시보드 상태 =====
@@ -115,59 +120,79 @@ const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
   const [viewMode, setViewMode] = useState<'day' | 'year'>('day');
 
-
-  // ===== 주문 탭에서 사용하는 메뉴 아이템 =====
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-
-  // 실시간 현재 시간 상태 및 업데이트 (주문 리스트 상단 헤더에 사용)
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
+    const q = query(
+      collection(db, "menuItems"),
+      orderBy("id", "asc")
+    );
+    const unsubscribe = onSnapshot(
+      q,
+      (snap: QuerySnapshot<DocumentData>) => {
+        const items = snap.docs.map(d => {
+          const data = d.data() as any;
+          return {
+            docId:         d.id,
+            id:            data.id,
+            name:          data.name,
+            purchasePrice: data.purchasePrice,
+            salesPrice:    data.salesPrice,
+            category:      data.category,
+            remainingStock:data.remainingStock,
+            totalStock:    data.totalStock,
+            quantity:      data.quantity ?? 0,
+          } as MenuItem;
+        });
+        setMenuItems(items);
+      },
+      (err: FirestoreError) => console.error("메뉴 구독 에러:", err)
+    );
+    return () => unsubscribe();
   }, []);
+
 
   // 3) **여기에** orders 구독용 useEffect 추가
   useEffect(() => {
-    const fetchOrders = async () => {
-      const q = query(collection(db, "orders"), orderBy("timestamp", "desc"));
-      const snap = await getDocs(q);
-      const orders = snap.docs.map(d => {
-        const data = d.data() as any;
-        return {
-          docId:        d.id,
-          id:           data.id ?? Date.now(),
-          items:        data.items,
-          totalAmount:  data.totalAmount,
-          discount:     data.discount,
-          finalAmount:  data.finalAmount,
-          paymentMethod:data.paymentMethod,
-          timestamp:    data.timestamp.toDate(),
-          isExpense:    data.isExpense,
-          purchaseTotal:data.purchaseTotal
-        } as Order;
-      });
-      setCompletedOrders(orders);
-    };
-    fetchOrders();
-    const id = setInterval(fetchOrders, 5000);
-    return () => clearInterval(id);
-  }, []);;
+    const q = query(collection(db, "orders"), orderBy("timestamp", "desc"));
+    const unsub = onSnapshot(
+      q,
+      (snap: QuerySnapshot<DocumentData>) => {
+        const orders = snap.docs.map(d => {
+          const data = d.data() as any;
+          return {
+            docId:        d.id,
+            id:           data.id ?? Date.now(),
+            items:        data.items,
+            totalAmount:  data.totalAmount,
+            discount:     data.discount,
+            finalAmount:  data.finalAmount,
+            paymentMethod:data.paymentMethod,
+            timestamp:    data.timestamp.toDate(),
+            isExpense:    data.isExpense,
+            purchaseTotal:data.purchaseTotal
+          } as Order;
+        });
+        setCompletedOrders(orders);
+      },
+      (err: FirestoreError) => console.error("주문 구독 에러:", err)
+    );
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
-    const loadCategories = async () => {
     const q = query(collection(db, "categories"), orderBy("id", "asc"));
-    const snapshot = await getDocs(q);
-    const cats = snapshot.docs.map(d => ({
+    const unsub = onSnapshot(
+      q,
+      (snap: QuerySnapshot<DocumentData>) => {
+        const cats = snap.docs.map(d => ({
           docId:    d.id,
           ...(d.data() as any)
         })) as Category[];
         setProductCategories(cats);
-      };
-      loadCategories();
-    }, []);
-   
+      },
+      (err: FirestoreError) => console.error("카테고리 구독 에러:", err)
+    );
+    return () => unsub();
+  }, []);
   
 
    // 툴팁 상태 (시간대별 매출 그래프에 사용)
@@ -194,27 +219,33 @@ const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   }, [tooltip.visible]);
 
 
-useEffect(() => {
-  (async () => {
+  useEffect(() => {
     const q = query(collection(db, "menuItems"), orderBy("id", "asc"));
-    const snapshot = await getDocs(q);
-    const items = snapshot.docs.map(docSnap => {
-      const data = docSnap.data() as any;
-      return {
-        docId:         docSnap.id,
-        id:            data.id,
-        name:          data.name,
-        purchasePrice: data.purchasePrice,
-        salesPrice:    data.salesPrice,
-        category:      data.category,
-        remainingStock:data.remainingStock,
-        totalStock:    data.totalStock,
-        quantity:      data.quantity ?? 0,
-      } as MenuItem;
-    });
-    setMenuItems(items);
-  })();
-}, []);
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        const items = snap.docs.map(d => {
+          const data = d.data() as any;
+          return {
+            docId:         d.id,
+            id:            data.id,
+            name:          data.name,
+            purchasePrice: data.purchasePrice,
+            salesPrice:    data.salesPrice,
+            category:      data.category,
+            remainingStock:data.remainingStock,
+            totalStock:    data.totalStock,
+            quantity:      data.quantity ?? 0,
+          } as MenuItem;
+        });
+        // ◀ 여기서 setMenuItems 가 유효해야 에러가 없습니다
+        setMenuItems(items);
+      },
+      (err) => console.error("메뉴 구독 에러:", err)
+    );
+    return () => unsubscribe();
+  }, []);
+
 
   // 주문 탭: 현재 카테고리에 따른 필터
   const filteredItems = productCategories.find(cat => cat.name === activeCategory)?.enabled
@@ -338,6 +369,14 @@ useEffect(() => {
       showToastMessage("오류가 발생했습니다. 콘솔을 확인하세요.");
     }
   };
+
+  //실시간 시간 갱신
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
   
   // ===== 매출/통계 관련 =====
   // 오늘 날짜를 기준으로 완료된 주문 필터링
@@ -518,24 +557,22 @@ const handleMonthSelect = (year: number, month: number) => {
 
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) return;
-  
     try {
-      // Firestore에 새 문서 추가
-      const ref = await addDoc(collection(db, "categories"), {
-        id:       Date.now(),               // 유니크 숫자 ID
+      await addDoc(collection(db, "categories"), {
+        id:       Date.now(),
         name:     newCategoryName.trim(),
         enabled:  true,
         inOrders: false
       });
-      console.log("✅ 카테고리 추가 성공, docId:", ref.id);
-  
-      // 입력 초기화·모달 닫기
       setNewCategoryName("");
       setIsModalOpen(false);
-    } catch (error) {
-      console.error("❌ 카테고리 추가 실패:", error);
+      // ★ 즉시 새로 고침
+    } catch (e) {
+      console.error("❌ 카테고리 추가 오류:", e);
+      showToastMessage("카테고리 등록에 실패했습니다");
     }
   };
+  
 
   const handleEditClick = (category: Category) => {
     setEditingCategory(category);
@@ -598,18 +635,24 @@ const handleMonthSelect = (year: number, month: number) => {
   });
   const [selectedProduct, setSelectedProduct] = useState<MenuItem | null>(null);
 
+  
+ 
   const handleAddProduct = async () => {
-    const colRef = collection(db, "menuItems");
-    await addDoc(colRef, {
-      id:            Date.now(),
-      name:          newProduct.name,
-      purchasePrice: Number(newProduct.price),
-      salesPrice:    Number(newProduct.salesPrice),
-      category:      newProduct.category,
-      remainingStock:Number(newProduct.salesStock),
-      totalStock:    Number(newProduct.salesStock),
-    });
-    setIsProductAddModalOpen(false);
+    try {
+      await addDoc(collection(db, "menuItems"), {
+        id:            Date.now(),
+        name:          newProduct.name,
+        purchasePrice: Number(newProduct.price),
+        salesPrice:    Number(newProduct.salesPrice),
+        category:      newProduct.category,
+        remainingStock:Number(newProduct.salesStock),
+        totalStock:    Number(newProduct.salesStock),
+      });
+      setIsProductAddModalOpen(false);
+    } catch (e) {
+      console.error("❌ 상품 추가 오류:", e);
+      showToastMessage("상품 등록에 실패했습니다");
+    }
   };
 
   const handleEditClickProduct = (item: MenuItem) => {
