@@ -429,6 +429,7 @@ const todaySales = todayOrders
     return [];
   };
 
+  
   const filteredOrders = getFilteredOrders();
   const dashboardSales = filteredOrders
   .filter(order => !order.isExpense)
@@ -615,6 +616,7 @@ const handleMonthSelect = (year: number, month: number) => {
     categoryPage * categoriesPerPage
   );
 
+
   // ===== 상품 관리 (대시보드 '상품' 화면) =====
   const [isProductAddModalOpen, setIsProductAddModalOpen] = useState(false);
   const [isProductDeleteModalOpen, setIsProductDeleteModalOpen] = useState(false);
@@ -703,6 +705,57 @@ const handleMonthSelect = (year: number, month: number) => {
   const total = Math.max(0, subtotal - discount);
   const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
+
+ // 카테고리 등록 상품 우선순위 변경
+ const displayedCategories = React.useMemo(() => {
+  return productCategories
+    .filter(cat => cat.enabled)
+    .sort((a, b) => {
+      const aHas = menuItems.some(item => item.category === a.name);
+      const bHas = menuItems.some(item => item.category === b.name);
+      if (aHas && !bHas) return -1;
+      if (!aHas && bHas) return 1;
+      return 0;
+    });
+}, [productCategories, menuItems]);
+
+ const [initializedCategory, setInitializedCategory] = useState(false);
+useEffect(() => {
+  if (!initializedCategory && displayedCategories.length > 0) {
+    setActiveCategory(displayedCategories[0].name);
+    setInitializedCategory(true);
+  }
+}, [displayedCategories, initializedCategory]);
+
+// 한 번만 기본 카테고리 세팅용 플래그
+const [isCatInit, setIsCatInit] = useState(false);
+
+useEffect(() => {
+  if (!isCatInit && displayedCategories.length > 0 && menuItems.length > 0) {
+    // 상품 있는 카테고리 중 첫 번째를 기본으로
+    const firstWithItems = displayedCategories.find(cat =>
+      menuItems.some(item => item.category === cat.name)
+    );
+    setActiveCategory(firstWithItems?.name || displayedCategories[0].name);
+    setIsCatInit(true);
+  }
+}, [displayedCategories, menuItems, isCatInit]);
+
+
+
+ useEffect(() => {
+  if (displayedCategories.length === 0) return;
+
+  // 현재 activeCategory 에 상품이 없으면
+  const hasInCurrent = menuItems.some(item => item.category === activeCategory);
+  if (!hasInCurrent) {
+    setActiveCategory(displayedCategories[0].name);
+    setCurrentPage(1);
+  }
+}, [displayedCategories, menuItems]);
+
+
+
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       {/* ===== Header ===== */}
@@ -723,6 +776,8 @@ const handleMonthSelect = (year: number, month: number) => {
         </div>
       </div>
 
+
+
       {/* ===== Main Content ===== */}
       <div className="flex-1 flex">
         {activeView === 'order' ? (
@@ -732,28 +787,29 @@ const handleMonthSelect = (year: number, month: number) => {
             <div className="w-3/4 flex flex-col">
               {/* 카테고리 탭 */}
               <div className="flex overflow-x-auto bg-white border-b">
-                {productCategories
-                  .filter(category => category.enabled)
-                  .map(category => (
-                    <button
-                      key={category.id}
-                      className={`px-6 py-4 whitespace-nowrap font-medium ${
-                        activeCategory === category.name
-                          ? 'text-blue-600 border-b-2 border-blue-600'
-                          : 'text-gray-500 hover:text-gray-700'
-                      } ${expenses.length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      onClick={() => {
-                        if (expenses.length === 0) {
-                          setActiveCategory(category.name);
-                          setCurrentPage(1);
-                        }
-                      }}
-                      disabled={expenses.length > 0}
-                    >
-                      {category.name}
-                    </button>
-                  ))}
-              </div>
+              {displayedCategories.map(category => (
+              <button
+                key={category.id}
+                className={`px-6 py-4 whitespace-nowrap font-medium ${
+                  activeCategory === category.name
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                } ${expenses.length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                onClick={() => {
+                  if (expenses.length === 0) {
+                    setActiveCategory(category.name);
+                    setCurrentPage(1);
+                  }
+                }}
+                disabled={expenses.length > 0}
+              >
+                {category.name}
+              </button>
+          ))}
+          </div>
+
+
+
 
               {/* ▼▼▼ 주문 탭 - 메뉴 그리드 (절대배치) ▼▼▼ */}
               {currentItems.length === 0 ? (
