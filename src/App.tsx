@@ -11,16 +11,31 @@ import {
   Plus as PlusIcon
 } from 'lucide-react';
 
+import { 
+  collection, 
+  query, 
+  orderBy, 
+  onSnapshot, 
+  addDoc, 
+  doc, 
+  updateDoc, 
+  deleteDoc, 
+  serverTimestamp 
+} from "firebase/firestore";
+import { db } from "./firebase";
+
 type SalesFilter = '어제' | '오늘' | '이번 주' | '이번 달' | '직접 선택';
 
 interface Category {
-  id: number;
+  docId?: string;    
+  id: number;        
   name: string;
   enabled: boolean;
   inOrders?: boolean;
 }
 
 interface MenuItem {
+  docId?: string;
   id: number;
   name: string;
   salesPrice: number;
@@ -32,7 +47,7 @@ interface MenuItem {
 }
 
 interface Order {
-  id: number;
+  id: string;
   items: Array<{
     id: number;
     name: string;
@@ -73,19 +88,18 @@ function App() {
   const [expenseToDelete, setExpenseToDelete] = useState<number | null>(null);
   const [showDayDetailsModal, setShowDayDetailsModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  
 
   // ===== 카테고리 & 대시보드 상태 =====
-  const [productCategories, setProductCategories] = useState<Category[]>([
-    { id: 1, name: '식품', enabled: true, inOrders: true },
-    { id: 2, name: '채소', enabled: true, inOrders: true },
-    { id: 3, name: '대용량 상품', enabled: true, inOrders: true },
-  ]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [editingText, setEditingText] = useState<string>('');
+
+
+const [productCategories, setProductCategories] = useState<Category[]>([]);
+const [newCategoryName, setNewCategoryName]     = useState("");
+const [isModalOpen, setIsModalOpen]             = useState(false);
+const [editingCategory, setEditingCategory]     = useState<Category | null>(null);
+const [editingText, setEditingText]             = useState("");
+const [selectedCategory, setSelectedCategory]   = useState<Category | null>(null);
+const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // ===== 대시보드 필터 상태 =====
   const [salesFilter, setSalesFilter] = useState<SalesFilter>('오늘');
@@ -103,13 +117,65 @@ function App() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
 
   // 실시간 현재 시간 상태 및 업데이트 (주문 리스트 상단 헤더에 사용)
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // 3) **여기에** orders 구독용 useEffect 추가
+  useEffect(() => {
+    const q = query(
+      collection(db, "orders"),
+      orderBy("timestamp", "desc")
+    );
+    const unsubscribe = onSnapshot(
+      q,
+      snapshot => {
+        const loaded = snapshot.docs.map(docSnap => {
+          const d = docSnap.data() as any;
+          return {
+            id:            docSnap.id,
+            items:         d.items,
+            totalAmount:   d.totalAmount,
+            discount:      d.discount,
+            finalAmount:   d.finalAmount,
+            paymentMethod: d.paymentMethod,
+            purchaseTotal: d.purchaseTotal,
+            isExpense:     d.isExpense || false,
+            timestamp:     d.timestamp?.toDate() ?? new Date()
+          } as Order;
+        });
+        console.log("🔥 loaded orders:", loaded);
+        setCompletedOrders(loaded);
+      },
+      err => console.error("orders 구독 에러:", err)
+    );
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, "categories"), orderBy("id", "asc"));
+    const unsubscribe = onSnapshot(q, snapshot => {
+      const cats = snapshot.docs.map(d => {
+        const data = d.data() as any;
+        return {
+          docId:    d.id,
+          id:       data.id,
+          name:     data.name,
+          enabled:  data.enabled,
+          inOrders: data.inOrders
+        } as Category;
+      });
+      setProductCategories(cats);
+    }, err => {
+      console.error("categories 구독 에러:", err);
+    });
+    return () => unsubscribe();
+  }, []);
+  
 
    // 툴팁 상태 (시간대별 매출 그래프에 사용)
    const [tooltip, setTooltip] = useState<{ visible: boolean; x: number; y: number; amount: number }>({
@@ -135,31 +201,31 @@ function App() {
   }, [tooltip.visible]);
 
 
-  // 실제 API에서 데이터를 받아오도록 useEffect 사용
-  useEffect(() => {
-    fetch('/menuItems.json')
-      .then(res => res.json())
-      .then((data: MenuItem[]) => {
-        setMenuItems(data);
-      })
-      .catch(error => {
-        console.error(error);
-        // 에러 발생 시 더미 데이터 사용
-        setMenuItems(
-          productCategories.flatMap((category, categoryIndex) =>
-            Array.from({ length: 100 }, (_, i) => ({
-              id: categoryIndex * 100 + i + 1,
-              name: `${category.name} 상품 ${i + 1}`,
-              purchasePrice: (Math.floor(Math.random() * 10) + 1) * 1000,
-              salesPrice: (Math.floor(Math.random() * 10) + 1) * 1500,
-              category: category.name,
-              remainingStock: Math.floor(Math.random() * 10) + 1,
-              totalStock: 10,
-            }))
-          )
-        );
-      });
-  }, []);
+useEffect(() => {
+  const q = query(
+    collection(db, "menuItems"),
+    orderBy("id", "asc")
+  );
+  const unsubscribe = onSnapshot(q, snapshot => {
+    const items = snapshot.docs.map(docSnap => {
+      const data = docSnap.data() as any;
+      return {
+        docId:         docSnap.id,
+        id:            data.id,
+        name:          data.name,
+        purchasePrice: data.purchasePrice,
+        salesPrice:    data.salesPrice,
+        category:      data.category,
+        remainingStock:data.remainingStock,
+        totalStock:    data.totalStock,
+        quantity:      data.quantity ?? 0,
+      } as MenuItem;
+    });
+    setMenuItems(items);
+  }, err => console.error("메뉴 로드 실패", err));
+  return () => unsubscribe();
+}, []);
+
 
   // 주문 탭: 현재 카테고리에 따른 필터
   const filteredItems = productCategories.find(cat => cat.name === activeCategory)?.enabled
@@ -218,67 +284,72 @@ function App() {
     showToastMessage("상품이 삭제되었습니다");
   };
 
-  const processOrder = (paymentMethod: string) => {
-    if (expenses.length > 0) {
-      const totalExpenseAmount = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-      const expenseOrder: Order = {
-        id: Date.now(),
-        items: [],
-        totalAmount: -totalExpenseAmount,
-        discount: 0,
-        finalAmount: -totalExpenseAmount,
-        paymentMethod: '지출',
-        timestamp: new Date(),
-        isExpense: true
-      };
-      setCompletedOrders(prev => [...prev, expenseOrder]);
-      setExpenses([]);
-      showToastMessage("지출이 등록되었습니다");
-    } else {
+  const processOrder = async (paymentMethod: string) => {
+    try {
+      // ────────────────────
+      // 1) 지출 처리
+      // ────────────────────
+      if (expenses.length > 0) {
+        const totalExpenseAmount = expenses.reduce((sum, e) => sum + e.amount, 0);
+  
+        const ref = await addDoc(collection(db, "orders"), {
+          items:         [],            // 지출이므로 빈 배열
+          totalAmount:  -totalExpenseAmount,
+          discount:       0,
+          finalAmount:  -totalExpenseAmount,
+          paymentMethod: "지출",
+          timestamp:     serverTimestamp(),
+          isExpense:     true,
+        });
+        console.log("✅ 지출 문서 추가됨:", ref.id);
+  
+        setExpenses([]);
+        showToastMessage("지출이 등록되었습니다");
+        return;
+      }
+  
+      // ────────────────────
+      // 2) 일반 주문 처리
+      // ────────────────────
       const subtotal = orderItems.reduce(
-        (sum, item) => sum + ((item.salesPrice ?? 0) * (item.quantity || 1)),
+        (sum, item) => sum + item.salesPrice * (item.quantity || 1),
         0
       );
-      const total = Math.max(0, subtotal - discount);
+      const finalAmount = Math.max(0, subtotal - discount);
       const purchaseTotal = orderItems.reduce(
         (sum, item) => sum + item.purchasePrice * (item.quantity || 1),
         0
       );
-
-      const newOrder: Order = {
-        id: Date.now(),
-        items: orderItems.map(item => ({
-          id: item.id,
-          name: item.name,
-          price: (item.salesPrice ?? 0),
-          quantity: item.quantity || 1
+  
+      const ref = await addDoc(collection(db, "orders"), {
+        items: orderItems.map(i => ({
+          id:       i.id,
+          name:     i.name,
+          price:    i.salesPrice,
+          quantity: i.quantity,
         })),
-        totalAmount: subtotal,
+        totalAmount:   subtotal,
         discount,
-        finalAmount: total,
+        finalAmount,
         paymentMethod,
-        timestamp: new Date(),
+        timestamp:     serverTimestamp(),
         purchaseTotal,
-      };
-
-      // 실제 주문(결제) 시에만, 주문된 수량만큼 재고 감소
-      setMenuItems(prev =>
-        prev.map(prod => {
-          const orderItem = orderItems.find(item => item.id === prod.id);
-          if (orderItem) {
-            return { ...prod, remainingStock: Math.max(prod.remainingStock - (orderItem.quantity || 0), 0) };
-          }
-          return prod;
-        })
-      );
-      
-      setCompletedOrders(prev => [...prev, newOrder]);
+      });
+      console.log("✅ 주문 문서 추가됨:", ref.id);
+  
+      // ────────────────────
+      // 3) 로컬 상태 초기화
+      // ────────────────────
       setOrderItems([]);
       setDiscount(0);
       showToastMessage("주문이 완료되었습니다");
+  
+    } catch (error) {
+      console.error("❌ processOrder 에러:", error);
+      showToastMessage("오류가 발생했습니다. 콘솔을 확인하세요.");
     }
   };
-
+  
   // ===== 매출/통계 관련 =====
   // 오늘 날짜를 기준으로 완료된 주문 필터링
 const today = new Date();
@@ -449,27 +520,31 @@ const handleMonthSelect = (year: number, month: number) => {
 
 
   // ===== 카테고리 관리 함수 =====
-  const handleToggle = (id: number) => {
-    setProductCategories(categories =>
-      categories.map(cat =>
-        cat.id === id ? { ...cat, enabled: !cat.enabled } : cat
-      )
-    );
+  const handleToggle = async (cat: Category) => {
+    if (!cat.docId) return;
+    await updateDoc(doc(db, "categories", cat.docId), {
+      enabled: !cat.enabled
+    });
   };
 
-  const handleAddCategory = () => {
-    if (newCategoryName.trim()) {
-      setProductCategories(prev => [
-        ...prev,
-        {
-          id: prev.length + 1,
-          name: newCategoryName,
-          enabled: true,
-          inOrders: false
-        }
-      ]);
-      setNewCategoryName('');
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return;
+  
+    try {
+      // Firestore에 새 문서 추가
+      const ref = await addDoc(collection(db, "categories"), {
+        id:       Date.now(),               // 유니크 숫자 ID
+        name:     newCategoryName.trim(),
+        enabled:  true,
+        inOrders: false
+      });
+      console.log("✅ 카테고리 추가 성공, docId:", ref.id);
+  
+      // 입력 초기화·모달 닫기
+      setNewCategoryName("");
       setIsModalOpen(false);
+    } catch (error) {
+      console.error("❌ 카테고리 추가 실패:", error);
     }
   };
 
@@ -478,16 +553,13 @@ const handleMonthSelect = (year: number, month: number) => {
     setEditingText(category.name);
   };
 
-  const handleEditSave = (category: Category) => {
-    if (editingText.trim()) {
-      setProductCategories(categories =>
-        categories.map(cat =>
-          cat.id === category.id ? { ...cat, name: editingText.trim() } : cat
-        )
-      );
-      setEditingCategory(null);
-      setEditingText('');
-    }
+  const handleEditSave = async (cat: Category) => {
+    if (!cat.docId || !editingText.trim()) return;
+    await updateDoc(doc(db, "categories", cat.docId), {
+      name: editingText.trim()
+    });
+    setEditingCategory(null);
+    setEditingText("");
   };
 
   const handleEditCancel = () => {
@@ -500,14 +572,11 @@ const handleMonthSelect = (year: number, month: number) => {
     setIsDeleteModalOpen(true);
   };
 
-  const handleDeleteConfirm = () => {
-    if (selectedCategory) {
-      setProductCategories(categories =>
-        categories.filter(cat => cat.id !== selectedCategory.id)
-      );
-      setIsDeleteModalOpen(false);
-      setSelectedCategory(null);
-    }
+  const handleDeleteConfirm = async () => {
+    if (!selectedCategory?.docId) return;
+    await deleteDoc(doc(db, "categories", selectedCategory.docId));
+    setIsDeleteModalOpen(false);
+    setSelectedCategory(null);
   };
 
   // === 카테고리 화면 페이지네이션 ===
@@ -540,18 +609,17 @@ const handleMonthSelect = (year: number, month: number) => {
   });
   const [selectedProduct, setSelectedProduct] = useState<MenuItem | null>(null);
 
-  const handleAddProduct = () => {
-    const newItem: MenuItem = {
-      id: Date.now(),
-      name: newProduct.name,
-      salesPrice: Number(newProduct.salesPrice),
+  const handleAddProduct = async () => {
+    const colRef = collection(db, "menuItems");
+    await addDoc(colRef, {
+      id:            Date.now(),
+      name:          newProduct.name,
       purchasePrice: Number(newProduct.price),
-      category: newProduct.category,
-      remainingStock: Number(newProduct.salesStock),
-      totalStock: Number(newProduct.salesStock),
-    };
-    setMenuItems(prev => [...prev, newItem]);
-    setNewProduct({ name: '', category: '', price: '' ,salesPrice: '',salesStock: '',});
+      salesPrice:    Number(newProduct.salesPrice),
+      category:      newProduct.category,
+      remainingStock:Number(newProduct.salesStock),
+      totalStock:    Number(newProduct.salesStock),
+    });
     setIsProductAddModalOpen(false);
   };
 
@@ -567,26 +635,25 @@ const handleMonthSelect = (year: number, month: number) => {
     setIsProductEditModalOpen(true);
   };
 
-  const handleEditProduct = () => {
-    if (selectedProduct) {
-      const updated: MenuItem = {
-        ...selectedProduct,
-        name: editProduct.name,
-        category: editProduct.category,
-        salesPrice: Number(editProduct.salesPrice)
-      };
-      setMenuItems(prev => prev.map(i => (i.id === selectedProduct.id ? updated : i)));
-      setIsProductEditModalOpen(false);
-      setSelectedProduct(null);
-    }
+  const handleEditProduct = async () => {
+    if (!selectedProduct?.docId) return;
+    const docRef = doc(db, "menuItems", selectedProduct.docId);
+    await updateDoc(docRef, {
+      name:           editProduct.name,
+      purchasePrice:  Number(editProduct.purchasePrice),
+      salesPrice:     Number(editProduct.salesPrice),
+      remainingStock: Number(editProduct.quantity || 0),
+      totalStock:     Number(editProduct.quantity || 0),
+    });
+    setIsProductEditModalOpen(false);
+    setSelectedProduct(null);
   };
   
-  const handleDeleteProduct = () => {
-    if (selectedProduct) {
-      setMenuItems(prev => prev.filter(i => i.id !== selectedProduct.id));
-      setIsProductDeleteModalOpen(false);
-      setSelectedProduct(null);
-    }
+  const handleDeleteProduct = async () => {
+    if (!selectedProduct?.docId) return;
+    await deleteDoc(doc(db, "menuItems", selectedProduct.docId));
+    setIsProductDeleteModalOpen(false);
+    setSelectedProduct(null);
   };
 
   // ===== 유틸 =====
@@ -1222,12 +1289,22 @@ const handleMonthSelect = (year: number, month: number) => {
                   <div className="flex justify-between items-center mb-6">
                     <h2 className="text-2xl font-semibold">상품 관리</h2>
                     <button
-                      onClick={() => setIsProductAddModalOpen(true)}
+                      onClick={() => {
+                        setNewProduct({
+                          name: "",
+                          category: "",
+                          price: "",
+                          salesPrice: "",
+                          salesStock: "",
+                        });
+                        setIsProductAddModalOpen(true);
+                      }}
                       className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
                     >
                       <PlusIcon size={20} />
                       상품 추가
                     </button>
+
                   </div>
                   {productCategories.filter(cat => cat.enabled).map(cat => {
                     const catItems = menuItems.filter(i => i.category === cat.name);
@@ -1293,7 +1370,7 @@ const handleMonthSelect = (year: number, month: number) => {
                               <input
                                 type="checkbox"
                                 checked={category.enabled}
-                                onChange={() => handleToggle(category.id)}
+                                onChange={() => handleToggle(category)}
                                 className="sr-only peer"
                               />
                               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
@@ -1718,29 +1795,32 @@ const handleMonthSelect = (year: number, month: number) => {
         </div>
       )}
 
-      {isDeleteModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg w-[400px] p-6">
-            <h3 className="text-lg text-center mb-6">
-              해당 카테고리를 삭제할까요?
-            </h3>
-            <div className="flex flex-col space-y-2">
-              <button
-                onClick={handleDeleteConfirm}
-                className="w-full bg-red-500 text-white py-2 rounded hover:bg-red-600"
-              >
-                카테고리 삭제
-              </button>
-              <button
-                onClick={() => setIsDeleteModalOpen(false)}
-                className="w-full text-gray-600 py-2 rounded hover:bg-gray-100"
-              >
-                취소
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+{isDeleteModalOpen && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div className="bg-white rounded-lg w-[400px] p-6">
+      <h3 className="text-center text-lg mb-6">해당 카테고리를 삭제할까요?</h3>
+      <div className="flex flex-col gap-2">
+        <button
+          onClick={handleDeleteConfirm}  // ← 여기!
+          className="w-full bg-red-500 text-white py-2 rounded hover:bg-red-600"
+        >
+          삭제
+        </button>
+        <button
+          onClick={() => {
+            // 취소 시에도 모달 닫고 선택 초기화
+            setIsDeleteModalOpen(false);
+            setSelectedCategory(null);
+          }}
+          className="w-full text-gray-600 py-2 rounded hover:bg-gray-200"
+        >
+          취소
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
 
       {isProductAddModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
