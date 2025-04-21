@@ -1,31 +1,31 @@
 // vite.config.js
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import path from 'path';
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      // firebase core
+      // Core
       'firebase/app': path.resolve(
         __dirname,
-        'node_modules/firebase/app/dist/esm/index.js'
+        'node_modules/firebase/dist/app/index.esm.js'
       ),
-      // full SDK firestore
+      // Full Firestore SDK
       'firebase/firestore': path.resolve(
         __dirname,
-        'node_modules/firebase/firestore/dist/index.mjs'
+        'node_modules/firebase/dist/firestore/index.esm.js'
       ),
-      // auth, analytics 등도 필요하다면 함께 설정
+      // (필요 시) auth, analytics 등도 함께 매핑
       'firebase/auth': path.resolve(
         __dirname,
-        'node_modules/firebase/auth/dist/index.mjs'
+        'node_modules/firebase/dist/auth/index.esm.js'
       ),
       'firebase/analytics': path.resolve(
         __dirname,
-        'node_modules/firebase/analytics/dist/index.esm.js'
+        'node_modules/firebase/dist/analytics/index.esm.js'
       )
     }
   }
-});
+})
