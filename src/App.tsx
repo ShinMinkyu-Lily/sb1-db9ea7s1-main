@@ -24,6 +24,7 @@ import {
   getDocs,
   FirestoreError, 
   onSnapshot,
+  increment,
 } from "firebase/firestore";
 import type { QuerySnapshot, DocumentData } from "firebase/firestore";
 import { db } from "./firebase";
@@ -357,6 +358,19 @@ const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
         purchaseTotal,
       });
       console.log("✅ 주문 문서 추가됨:", ref.id);
+
+      // 3.1) 재고 업데이트
+      // ────────────────────
+      await Promise.all(
+        orderItems.map(item => {
+          if (!item.docId) return Promise.resolve();
+          const itemRef = doc(db, "menuItems", item.docId);
+          // 남은 재고를 주문 수량만큼 깎아 줍니다.
+          return updateDoc(itemRef, {
+            remainingStock: increment(- (item.quantity || 0))
+          });
+        })
+      );
   
       // ────────────────────
       // 3) 로컬 상태 초기화
