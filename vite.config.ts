@@ -7,4 +7,14 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  build: {
+    rollupOptions: {
+      external: [
+        'firebase/app',
+        'firebase/firestore',
+        'firebase/auth',
+        'firebase/analytics'
+      ]
+    }
+  }
 });
