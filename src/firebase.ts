@@ -1,8 +1,8 @@
 // src/firebase.ts
-
-import { initializeApp } from "firebase/app";
-import { getFirestore }  from "firebase/firestore";
-import { getAnalytics }  from "firebase/analytics"; 
+import firebase from "firebase/compat/app";
+import "firebase/compat/auth";
+import "firebase/compat/firestore";
+import "firebase/compat/analytics";
 
 const firebaseConfig = {
   apiKey:            "AIzaSyBjCzuynx9F-Xl9-5Gr1rNMaVV3XVdwFOw",
@@ -14,6 +14,10 @@ const firebaseConfig = {
   measurementId:     "G-00784W2H9R"
 };
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
-export const analytics = getAnalytics(app);
+// 초기화 (firebase 네임스페이스에 설정)
+firebase.initializeApp(firebaseConfig);
+
+// 내보내기
+export const auth      = firebase.auth();
+export const db        = firebase.firestore();
+export const analytics = firebase.analytics();
