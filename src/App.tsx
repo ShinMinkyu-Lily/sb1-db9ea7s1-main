@@ -26,7 +26,7 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 import type { QuerySnapshot, DocumentData } from "firebase/firestore";
-import { db } from "./firebase";
+import { db, auth, analytics } from './firebase'
 
 
 type SalesFilter = '어제' | '오늘' | '이번 주' | '이번 달' | '직접 선택';
