@@ -7,25 +7,27 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      // firebase core
+      // firebase core: 개별 ESM 엔트리
       'firebase/app': path.resolve(
         __dirname,
         'node_modules/firebase/dist/esm/app/index.esm.js'
       ),
-      // full SDK firestore → index.esm.js 로 지정
+
+      // firestore를 루트 ESM 번들로 매핑
       'firebase/firestore': path.resolve(
         __dirname,
-        'node_modules/firebase/dist/esm/firestore/index.esm.js'
+        'node_modules/firebase/dist/esm/index.esm.js'
       ),
-      // auth, analytics 등 필요하다면 같이 설정
+
+      // auth, analytics 등도 동일한 루트 번들에서 가져옵니다
       'firebase/auth': path.resolve(
         __dirname,
-        'node_modules/firebase/dist/esm/auth/index.esm.js'
+        'node_modules/firebase/dist/esm/index.esm.js'
       ),
       'firebase/analytics': path.resolve(
         __dirname,
-        'node_modules/firebase/dist/esm/analytics/index.esm.js'
-      )
+        'node_modules/firebase/dist/esm/index.esm.js'
+      ),
     }
   },
   optimizeDeps: {
