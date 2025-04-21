@@ -122,18 +122,34 @@ const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'day' | 'year'>('day');
 
   useEffect(() => {
-    const unsubscribe = db
-      .collection("menuItems")
-      .orderBy("id", "asc")
-      .onSnapshot(snap => {
-        const items = snap.docs.map(doc => ({
-          docId:   doc.id,
-          ...(doc.data() as any),
-        })) as MenuItem[];
+    const q = query(
+      collection(db, "menuItems"),
+      orderBy("id", "asc")
+    );
+    const unsubscribe = onSnapshot(
+      q,
+      (snap: QuerySnapshot<DocumentData>) => {
+        const items = snap.docs.map(d => {
+          const data = d.data() as any;
+          return {
+            docId:         d.id,
+            id:            data.id,
+            name:          data.name,
+            purchasePrice: data.purchasePrice,
+            salesPrice:    data.salesPrice,
+            category:      data.category,
+            remainingStock:data.remainingStock,
+            totalStock:    data.totalStock,
+            quantity:      data.quantity ?? 0,
+          } as MenuItem;
+        });
         setMenuItems(items);
-      });
+      },
+      (err: FirestoreError) => console.error("메뉴 구독 에러:", err)
+    );
     return () => unsubscribe();
   }, []);
+
 
   // 3) **여기에** orders 구독용 useEffect 추가
   useEffect(() => {
@@ -623,16 +639,21 @@ const handleMonthSelect = (year: number, month: number) => {
   
  
   const handleAddProduct = async () => {
-    await db.collection("menuItems").add({
-      id:            Date.now(),
-      name:          newProduct.name,
-      purchasePrice: Number(newProduct.price),
-      salesPrice:    Number(newProduct.salesPrice),
-      category:      newProduct.category,
-      remainingStock:Number(newProduct.salesStock),
-      totalStock:    Number(newProduct.salesStock),
-    });
-    setIsProductAddModalOpen(false);
+    try {
+      await addDoc(collection(db, "menuItems"), {
+        id:            Date.now(),
+        name:          newProduct.name,
+        purchasePrice: Number(newProduct.price),
+        salesPrice:    Number(newProduct.salesPrice),
+        category:      newProduct.category,
+        remainingStock:Number(newProduct.salesStock),
+        totalStock:    Number(newProduct.salesStock),
+      });
+      setIsProductAddModalOpen(false);
+    } catch (e) {
+      console.error("❌ 상품 추가 오류:", e);
+      showToastMessage("상품 등록에 실패했습니다");
+    }
   };
 
   const handleEditClickProduct = (item: MenuItem) => {
