@@ -1,11 +1,8 @@
 // src/firebase.ts
 
-// 1) Firebase core
-import { initializeApp }    from "firebase/app";
-// 2) Firestore 모듈
-import { getFirestore }     from "firebase/firestore";
-// (선택) Analytics가 필요하면
-import { getAnalytics }     from "firebase/analytics";
+import { initializeApp } from "firebase/app";
+import { getFirestore }  from "firebase/firestore";
+import { getAnalytics }  from "firebase/analytics"; 
 
 const firebaseConfig = {
   apiKey:            "AIzaSyBjCzuynx9F-Xl9-5Gr1rNMaVV3XVdwFOw",
@@ -17,11 +14,6 @@ const firebaseConfig = {
   measurementId:     "G-00784W2H9R"
 };
 
-// Firebase 앱 초기화
 const app = initializeApp(firebaseConfig);
-
-// 3) Firestore 인스턴스 생성 후 export
 export const db = getFirestore(app);
-
-// (선택) Analytics export
 export const analytics = getAnalytics(app);
