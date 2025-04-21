@@ -7,33 +7,32 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      // firebase/app 풀 SDK ESM 진입점
+      // firebase core
       'firebase/app': path.resolve(
         __dirname,
-        'node_modules/firebase/app/dist/esm/index.js'
+        'node_modules/firebase/dist/esm/app/index.esm.js'
       ),
-      // firebase/auth 풀 SDK ESM 진입점
-      'firebase/auth': path.resolve(
-        __dirname,
-        'node_modules/firebase/auth/dist/esm/index.js'
-      ),
-      // firebase/firestore 풀 SDK는 @firebase/firestore 패키지 내부에 있습니다
+      // full SDK firestore → index.esm.js 로 지정
       'firebase/firestore': path.resolve(
         __dirname,
-        'node_modules/@firebase/firestore/dist/index.esm.js'
+        'node_modules/firebase/dist/esm/firestore/index.esm.js'
       ),
-      // firebase/analytics 풀 SDK ESM 진입점
+      // auth, analytics 등 필요하다면 같이 설정
+      'firebase/auth': path.resolve(
+        __dirname,
+        'node_modules/firebase/dist/esm/auth/index.esm.js'
+      ),
       'firebase/analytics': path.resolve(
         __dirname,
-        'node_modules/firebase/analytics/dist/index.esm.js'
-      ),
+        'node_modules/firebase/dist/esm/analytics/index.esm.js'
+      )
     }
   },
   optimizeDeps: {
     include: [
       'firebase/app',
-      'firebase/auth',
       'firebase/firestore',
+      'firebase/auth',
       'firebase/analytics'
     ]
   }
