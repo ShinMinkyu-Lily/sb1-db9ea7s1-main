@@ -15,14 +15,17 @@ import {
   collection, 
   query, 
   orderBy, 
-  onSnapshot, 
   addDoc, 
   doc, 
   updateDoc, 
   deleteDoc, 
-  serverTimestamp 
+  serverTimestamp,
+  getDocs,
+  FirestoreError, 
 } from "firebase/firestore";
+import type { QuerySnapshot, DocumentData } from "firebase/firestore";
 import { db } from "./firebase";
+
 
 type SalesFilter = '어제' | '오늘' | '이번 주' | '이번 달' | '직접 선택';
 
@@ -127,54 +130,44 @@ const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // 3) **여기에** orders 구독용 useEffect 추가
   useEffect(() => {
-    const q = query(
-      collection(db, "orders"),
-      orderBy("timestamp", "desc")
-    );
-    const unsubscribe = onSnapshot(
-      q,
-      snapshot => {
-        const loaded = snapshot.docs.map(docSnap => {
-          const d = docSnap.data() as any;
-          return {
-            id:            docSnap.id,
-            items:         d.items,
-            totalAmount:   d.totalAmount,
-            discount:      d.discount,
-            finalAmount:   d.finalAmount,
-            paymentMethod: d.paymentMethod,
-            purchaseTotal: d.purchaseTotal,
-            isExpense:     d.isExpense || false,
-            timestamp:     d.timestamp?.toDate() ?? new Date()
-          } as Order;
-        });
-        console.log("🔥 loaded orders:", loaded);
-        setCompletedOrders(loaded);
-      },
-      err => console.error("orders 구독 에러:", err)
-    );
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const q = query(collection(db, "categories"), orderBy("id", "asc"));
-    const unsubscribe = onSnapshot(q, snapshot => {
-      const cats = snapshot.docs.map(d => {
+    const fetchOrders = async () => {
+      const q = query(collection(db, "orders"), orderBy("timestamp", "desc"));
+      const snap = await getDocs(q);
+      const orders = snap.docs.map(d => {
         const data = d.data() as any;
         return {
-          docId:    d.id,
-          id:       data.id,
-          name:     data.name,
-          enabled:  data.enabled,
-          inOrders: data.inOrders
-        } as Category;
+          docId:        d.id,
+          id:           data.id ?? Date.now(),
+          items:        data.items,
+          totalAmount:  data.totalAmount,
+          discount:     data.discount,
+          finalAmount:  data.finalAmount,
+          paymentMethod:data.paymentMethod,
+          timestamp:    data.timestamp.toDate(),
+          isExpense:    data.isExpense,
+          purchaseTotal:data.purchaseTotal
+        } as Order;
       });
-      setProductCategories(cats);
-    }, err => {
-      console.error("categories 구독 에러:", err);
-    });
-    return () => unsubscribe();
-  }, []);
+      setCompletedOrders(orders);
+    };
+    fetchOrders();
+    const id = setInterval(fetchOrders, 5000);
+    return () => clearInterval(id);
+  }, []);;
+
+  useEffect(() => {
+    const loadCategories = async () => {
+    const q = query(collection(db, "categories"), orderBy("id", "asc"));
+    const snapshot = await getDocs(q);
+    const cats = snapshot.docs.map(d => ({
+          docId:    d.id,
+          ...(d.data() as any)
+        })) as Category[];
+        setProductCategories(cats);
+      };
+      loadCategories();
+    }, []);
+   
   
 
    // 툴팁 상태 (시간대별 매출 그래프에 사용)
@@ -202,11 +195,9 @@ const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
 
 useEffect(() => {
-  const q = query(
-    collection(db, "menuItems"),
-    orderBy("id", "asc")
-  );
-  const unsubscribe = onSnapshot(q, snapshot => {
+  (async () => {
+    const q = query(collection(db, "menuItems"), orderBy("id", "asc"));
+    const snapshot = await getDocs(q);
     const items = snapshot.docs.map(docSnap => {
       const data = docSnap.data() as any;
       return {
@@ -222,10 +213,8 @@ useEffect(() => {
       } as MenuItem;
     });
     setMenuItems(items);
-  }, err => console.error("메뉴 로드 실패", err));
-  return () => unsubscribe();
+  })();
 }, []);
-
 
   // 주문 탭: 현재 카테고리에 따른 필터
   const filteredItems = productCategories.find(cat => cat.name === activeCategory)?.enabled
