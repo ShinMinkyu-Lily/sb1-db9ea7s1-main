@@ -7,10 +7,10 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      'firebase/app': path.resolve(__dirname, 'node_modules/firebase/app'),
-      'firebase/auth': path.resolve(__dirname, 'node_modules/firebase/auth'),
-      'firebase/firestore': path.resolve(__dirname, 'node_modules/firebase/firestore'),
-      'firebase/analytics': path.resolve(__dirname, 'node_modules/firebase/analytics'),
+      'firebase/app': path.resolve(__dirname, 'node_modules/firebase/app/dist/esm/index.esm.js'),
+      'firebase/auth': path.resolve(__dirname, 'node_modules/firebase/auth/dist/esm/index.esm.js'),
+      'firebase/firestore': path.resolve(__dirname, 'node_modules/firebase/firestore/dist/esm/index.esm.js'),
+      'firebase/analytics': path.resolve(__dirname, 'node_modules/firebase/analytics/dist/esm/index.esm.js'),
     },
   },
   optimizeDeps: {
