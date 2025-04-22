@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect,FormEvent } from 'react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import {
@@ -11,24 +11,37 @@ import {
   Plus as PlusIcon
 } from 'lucide-react';
 
-
 import { 
-  collection, 
-  query, 
-  orderBy, 
-  addDoc, 
-  doc, 
-  updateDoc, 
-  deleteDoc, 
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut
+} from "firebase/auth";
+
+import {
+  getDoc,
+  doc,
+  collection,
+  query,
+  orderBy,
+  addDoc,
+  updateDoc,
+  deleteDoc,
   serverTimestamp,
-  getDocs,
-  FirestoreError, 
   onSnapshot,
   increment,
+  FirestoreError
 } from "firebase/firestore";
 import type { QuerySnapshot, DocumentData } from "firebase/firestore";
-import { db } from "./firebase";
+import { auth, db } from "./firebase";
 
+// 사용자 권한(role) 타입
+type UserRole = 'master' | 'manager' | 'casher';
+
+// 로그인 후 가져올 유저 정보 형태
+interface AppUser {
+  uid:  string;
+  role: UserRole;
+}
 
 
 type SalesFilter = '어제' | '오늘' | '이번 주' | '이번 달' | '직접 선택';
@@ -76,52 +89,248 @@ interface Expense {
   amount: number;
 }
 
-function App() {
-  // ===== 주문 화면 상태 =====
-  const [activeCategory, setActiveCategory] = useState('식품');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [orderItems, setOrderItems] = useState<MenuItem[]>([]);
-  const [discount, setDiscount] = useState(0);
-  const [showDiscountModal, setShowDiscountModal] = useState(false);
-  const [discountAmount, setDiscountAmount] = useState('');
-  const [showExpenseModal, setShowExpenseModal] = useState(false);
-  const [expenseAmount, setExpenseAmount] = useState('');
-  const [expenseDescription, setExpenseDescription] = useState('');
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<number | null>(null);
-  const [expenseToDelete, setExpenseToDelete] = useState<number | null>(null);
-  const [showDayDetailsModal, setShowDayDetailsModal] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
+// -------- InputField --------
+interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
+    label: string;
+    id:    string;
+  }
+  const InputField: React.FC<InputFieldProps> = ({ label, id, ...props }) => (
+    <div className="space-y-2">
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+        {label}
+      </label>
+      <input
+        id={id}
+        {...props}
+        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1677FF] focus:border-[#1677FF] transition-all duration-200 text-gray-900"
+      />
+    </div>
+  );
   
+  // -------- Button --------
+  const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({
+    children, className = '', ...props
+  }) => (
+    <button
+      {...props}
+      className={
+        `w-full py-3 rounded-md font-semibold transition-colors duration-200 bg-[#1677FF] text-white hover:bg-[#005ecb] ` +
+        className
+      }
+    >{children}</button>
+  );
+  
+  // -------- LoginForm --------
+  interface LoginFormProps {
+    onLogin:      (email: string, pw: string) => Promise<void>;
+    errorMessage: string;
+  }
+  const LoginForm: React.FC<LoginFormProps> = ({ onLogin, errorMessage }) => {
+    const [email, setEmail] = useState('');
+    const [pw,    setPw]    = useState('');
+    const handleSubmit = (e: FormEvent) => {
+      e.preventDefault();
+      onLogin(email, pw);
+    };
+    return (
+      <div className="w-full max-w-md rounded-lg shadow-lg bg-white">
+        <div className="bg-[#1677FF] p-6 text-center text-white">
+          <svg className="w-6 h-6 mx-auto mb-2" /* User 아이콘 */ />
+          <h1 className="text-xl font-semibold">Login</h1>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <InputField
+            label="Username"
+            id="username"
+            type="text"
+            placeholder="user@example.com"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+          />
+          <InputField
+            label="Password"
+            id="password"
+            type="password"
+            placeholder="••••••••"
+            value={pw}
+            onChange={e => setPw(e.target.value)}
+          />
+          {errorMessage && <div className="text-red-500 text-sm">{errorMessage}</div>}
+          <div className="pt-2">
+            <Button type="submit">Log In</Button>
+          </div>
+        </form>
+      </div>
+    );
+  };
+  
+  // -------- LoginPage --------
+  interface LoginPageProps {
+    onLogin:      (email: string, pw: string) => Promise<void>;
+    errorMessage: string;
+  }
+  const LoginPage: React.FC<LoginPageProps> = ({ onLogin, errorMessage }) => (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <LoginForm onLogin={onLogin} errorMessage={errorMessage} />
+    </div>
+  );
 
-  // ===== 카테고리 & 대시보드 상태 =====
+function App() {
+//로그인 Hook 선언
+const [appUser, setAppUser] = useState<AppUser | null>(null);
+const [loadingAuth, setLoadingAuth] = useState(true);
+const [loginError, setLoginError] = useState("");
 
 
+
+//Auth 구독
+useEffect(() => {
+  const unsub = onAuthStateChanged(auth, async user => {
+    if (user) {
+      const snap = await getDoc(doc(db, "users", user.uid));
+      if (snap.exists()) {
+        setAppUser({ uid: user.uid, role: snap.data().role as UserRole });
+      } else {
+        await signOut(auth);
+        setAppUser(null);
+      }
+    } else {
+      setAppUser(null);
+    }
+    setLoadingAuth(false);
+  });
+  return unsub;
+}, []);
+
+//로그인 함수 (handleLogin) 선언
+ const handleLogin = async (email: string, pw: string) => {
+     try {
+       setLoginError("");
+       await signInWithEmailAndPassword(auth, email, pw);
+     } catch {
+       setLoginError("로그인에 실패했습니다");
+     }
+   };
+  
+//로그아웃 함수
+  const handleLogout = () => {
+    signOut(auth);
+  };
+
+//조건부 랜더링 (로그인 권한)
+  if (loadingAuth) return <div>로딩 중…</div>;
+  if (!appUser) return <LoginPage onLogin={handleLogin} errorMessage={loginError} />;
+
+//로그인 상태 에서 랜더링
+  return <AuthenticatedApp appUser={appUser} onLogout={handleLogout}/>;  
+  }
+
+// 로그인 후 실제 화면을 담당할 컴포넌트
+function AuthenticatedApp({
+  appUser,
+  onLogout
+}: {
+  appUser: AppUser;
+  onLogout: () => void;
+}) {
+
+//로그인 제외 Hook 호출
+const [activeView, setActiveView] = useState<'order' | 'dashboard'>('order');
 const [productCategories, setProductCategories] = useState<Category[]>([]);
-const [newCategoryName, setNewCategoryName]     = useState("");
-const [isModalOpen, setIsModalOpen]             = useState(false);
-const [editingCategory, setEditingCategory]     = useState<Category | null>(null);
-const [editingText, setEditingText]             = useState("");
-const [selectedCategory, setSelectedCategory]   = useState<Category | null>(null);
+const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
+const [orderItems, setOrderItems] = useState<MenuItem[]>([]);
+const [expenses, setExpenses] = useState<Expense[]>([]);
+const [discount, setDiscount] = useState(0);
+const [showDiscountModal, setShowDiscountModal] = useState(false);
+const [discountAmount, setDiscountAmount] = useState('');
+const [showExpenseModal, setShowExpenseModal] = useState(false);
+const [expenseAmount, setExpenseAmount] = useState('');
+const [expenseDescription, setExpenseDescription] = useState('');
+const [showToast, setShowToast] = useState(false);
+const [toastMessage, setToastMessage] = useState('');
+const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+const [itemToDelete, setItemToDelete] = useState<number | null>(null);
+const [expenseToDelete, setExpenseToDelete] = useState<number | null>(null);
+const [showDayDetailsModal, setShowDayDetailsModal] = useState(false);
+const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+const [currentPage, setCurrentPage] = useState(1);
+const [currentTime, setCurrentTime] = useState<Date>(new Date());
+const [salesFilter, setSalesFilter] = useState<SalesFilter>('오늘');
+const [dashboardTab, setDashboardTab] = useState<'매출현황' | '매출달력' | '상품' | '카테고리'>('매출현황');
+const [viewMode, setViewMode] = useState<'day' | 'year'>('day');
+const [newCategoryName, setNewCategoryName] = useState("");
+const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+const [editingText, setEditingText] = useState("");
+const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+const [isModalOpen, setIsModalOpen] = useState(false);
 const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+const [isProductAddModalOpen, setIsProductAddModalOpen] = useState(false);
+const [isProductEditModalOpen, setIsProductEditModalOpen] = useState(false);
+const [isProductDeleteModalOpen, setIsProductDeleteModalOpen] = useState(false);
 
-  // ===== 대시보드 필터 상태 =====
-  const [salesFilter, setSalesFilter] = useState<SalesFilter>('오늘');
+ // 주문 화면에서 현재 선택된 카테고리
+ const [activeCategory, setActiveCategory] = useState<string>('식품');
+  
+    //사용자 role 변경 시 기본 탭 설정
+    useEffect(() => {
+      if (!appUser) return;
+      if (appUser.role === 'manager') setActiveView('dashboard');
+      else setActiveView('order');
+    }, [appUser]);
+  
+    //Firestore 카테고리 구독
+    useEffect(() => {
+      const q = query(collection(db, "categories"), orderBy("id", "asc"));
+      return onSnapshot(q, (snap: QuerySnapshot<DocumentData>) => {
+        setProductCategories(snap.docs.map(d => ({ docId: d.id, ...(d.data() as any) } as Category)));
+      }, (err: FirestoreError) => console.error(err));
+    }, []);
+  
+    //Firestore 메뉴 구독
+    useEffect(() => {
+      const q = query(collection(db, "menuItems"), orderBy("id", "asc"));
+      return onSnapshot(q, snap => {
+        setMenuItems(snap.docs.map(d => {
+          const data = d.data() as any;
+          return { docId: d.id, id: data.id, name: data.name, purchasePrice: data.purchasePrice, salesPrice: data.salesPrice, category: data.category, remainingStock: data.remainingStock, totalStock: data.totalStock, quantity: data.quantity ?? 0 } as MenuItem;
+        }));
+      }, (err: FirestoreError) => console.error(err));
+    }, []);
+  
+    //Firestore 주문 구독
+    useEffect(() => {
+      const q = query(collection(db, "orders"), orderBy("timestamp", "desc"));
+      return onSnapshot(q, snap => {
+        setCompletedOrders(snap.docs.map(d => {
+          const data = d.data() as any;
+          return {
+            docId: d.id,
+            id: data.id ?? Date.now(),
+            items: data.items,
+            totalAmount: data.totalAmount,
+            discount: data.discount,
+            finalAmount: data.finalAmount,
+            paymentMethod: data.paymentMethod,
+            timestamp: data.timestamp.toDate(),
+            isExpense: data.isExpense,
+            purchaseTotal: data.purchaseTotal
+          } as Order;
+        }));
+      }, (err: FirestoreError) => console.error(err));
+    }, []);
+  
+    //실시간 타임스탬프
+    useEffect(() => {
+      const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+      return () => clearInterval(timer);
+    }, []);
 
-  // 상단 탭: 주문 / 현황
-  const [activeView, setActiveView] = useState<'order' | 'dashboard'>('order');
+ 
+
 
   // 대시보드 탭: 매출현황 / 매출달력 / '상품'(추가) / '카테고리'
-  const [dashboardTab, setDashboardTab] = useState<'매출현황' | '매출달력' | '상품' | '카테고리'>('매출현황');
-  const [completedOrders, setCompletedOrders] = useState<Order[]>([]);
-  const [viewMode, setViewMode] = useState<'day' | 'year'>('day');
-
   useEffect(() => {
     const q = query(
       collection(db, "menuItems"),
@@ -632,9 +841,6 @@ const handleMonthSelect = (year: number, month: number) => {
 
 
   // ===== 상품 관리 (대시보드 '상품' 화면) =====
-  const [isProductAddModalOpen, setIsProductAddModalOpen] = useState(false);
-  const [isProductDeleteModalOpen, setIsProductDeleteModalOpen] = useState(false);
-  const [isProductEditModalOpen, setIsProductEditModalOpen] = useState(false);
 
   const [newProduct, setNewProduct] = useState({
     name: '',
@@ -770,28 +976,41 @@ useEffect(() => {
 
 
 
-  return (
+ // 로그아웃 버튼 클릭 시 Firebase에서 signOut을 호출
+ const handleLogout = (event: React.MouseEvent<HTMLButtonElement>) => {
+ // (디버깅용) 클릭 확인
+     console.log("로그아웃 클릭!");
+     signOut(auth)
+       .then(() => {
+         console.log("로그아웃 성공");
+         // onAuthStateChanged 콜백이 appUser를 null로 만들어 로그인 페이지로 분기시킵니다.
+       })
+       .catch(err => {
+         console.error("로그아웃 중 에러:", err);
+       });
+   };
+
+    return (
     <div className="flex flex-col h-screen bg-gray-100">
-      {/* ===== Header ===== */}
-      <div className="bg-slate-800 text-white p-4 flex justify-center">
-        <div className="flex space-x-8">
-          <button
-            className={`px-6 py-2 ${activeView === 'order' ? 'bg-slate-700 rounded-md' : ''}`}
-            onClick={() => setActiveView('order')}
-          >
-            주문
-          </button>
-          <button
-            className={`px-6 py-2 ${activeView === 'dashboard' ? 'bg-slate-700 rounded-md' : ''}`}
-            onClick={() => setActiveView('dashboard')}
-          >
-            현황
-          </button>
-        </div>
-      </div>
-
-
-
+       {/* Header: role 에 따라 버튼 보이기 */}
+       <div className="bg-slate-800 text-white p-4 flex justify-center relative">
+         <div className="flex space-x-4">
+          {appUser && (appUser.role === 'master' || appUser.role === 'casher') && (
+             <button
+               className={`px-6 py-2 ${activeView==='order'?'bg-slate-700 rounded-md':''}`}
+               onClick={() => setActiveView('order')}
+             >주문</button>
+          )}
+          {appUser && (appUser.role === 'master' || appUser.role === 'manager') && (
+             <button
+               className={`px-6 py-2 ${activeView==='dashboard'?'bg-slate-700 rounded-md':''}`}
+               onClick={() => setActiveView('dashboard')}
+             >현황</button>
+          )}
+         </div>
+         <button onClick={handleLogout} className="absolute right-4 underline">로그아웃</button>
+       </div>
+      
       {/* ===== Main Content ===== */}
       <div className="flex-1 flex">
         {activeView === 'order' ? (
